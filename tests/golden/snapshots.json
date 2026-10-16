@@ -1,0 +1,38 @@
+{
+  "web-golden/web": [
+    "README.md",
+    "app.js",
+    "assets/.gitkeep",
+    "data/Log.json",
+    "data/data.js",
+    "index.html",
+    "style.css"
+  ],
+  "web-golden/desktop": [
+    ".gitignore",
+    "README.md",
+    "app-icon.png",
+    "codiram.project.json",
+    "package.json",
+    "src-tauri/Cargo.toml",
+    "src-tauri/build.rs",
+    "src-tauri/icons/128x128.png",
+    "src-tauri/icons/128x128@2x.png",
+    "src-tauri/icons/32x32.png",
+    "src-tauri/src/main.rs",
+    "src-tauri/tauri.conf.json",
+    "src/app.js",
+    "src/assets/.gitkeep",
+    "src/data/Log.json",
+    "src/data/data.js",
+    "src/index.html",
+    "src/style.css"
+  ],
+  "cli-golden/rust-cli": [
+    ".gitignore",
+    "Cargo.toml",
+    "README.md",
+    "codiram.project.json",
+    "src/main.rs"
+  ]
+}

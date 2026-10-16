@@ -1,29 +1,26 @@
 // IR -> Rust (std only, no external crates). Output is plain, readable Rust:
 // global variables become fields of a `State` struct that is passed to every function.
 import { irType } from '../../ir.js';
+import { emit, defineMapping } from '../../sdk/index.js';
 
 const KEYWORDS = new Set('as break const continue crate else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while async await dyn abstract become box do final macro override priv typeof unsized virtual yield try main'.split(' '));
 const RTYPE = { num: 'f64', str: 'String', bool: 'bool' };
 const VTYPE = { Number: 'num', String: 'str', Boolean: 'bool' };
 
-const snake = (s) => String(s).replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[^\p{L}\p{N}_]+/gu, '_').replace(/^_+|_+$/g, '').toLowerCase();
-const rstr = (s) => '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+const rstr = (s) => '"' + emit.escapeString(s) + '"';
 const fmtEsc = (s) => rstr(s).slice(1, -1).replace(/[{}]/g, (m) => m + m);
 const rnum = (v) => { const s = String(Number(v)); return /^-?\d+$/.test(s) ? s + '.0' : /e/i.test(s) ? Number(v).toFixed(10).replace(/0+$/, '') : s; };
 
-/** unique, valid, snake_case Rust identifiers */
-function namer() {
-  const used = new Set();
-  return (raw, fallback) => {
-    let base = snake(raw) || fallback;
-    if (/^\d/.test(base)) base = fallback + '_' + base;
-    if (KEYWORDS.has(base)) base += '_';
-    let n = base, i = 2;
-    while (used.has(n)) n = base + '_' + i++;
-    used.add(n);
-    return n;
-  };
-}
+const namer = () => emit.identifierNamer({ keywords: KEYWORDS });
+
+/** Operations that map 1:1 to a line of Rust: a table instead of code (see sdk/mapping.js). */
+const MAP = defineMapping({
+  comment: '// {text}',
+  exit: 'process::exit({code} as i32);',
+  sleep: 'thread::sleep(Duration::from_millis({ms}));',
+  write_file: 'fs::write({path}, {text}).ok();',
+  append_file: 'append_file({path}, {text});',
+});
 
 export function generateRust(ir, cfg, project) {
   const problems = [];
@@ -161,19 +158,7 @@ export function generateRust(ir, cfg, project) {
   }
 
   // ---- statements ----------------------------------------------------------------------------------
-  /** drops one pair of redundant outer parentheses: (a + b) -> a + b */
-  const unparen = (x) => {
-    if (x[0] !== '(' || x[x.length - 1] !== ')') return x;
-    let depth = 0, quote = false;
-    for (let i = 0; i < x.length; i++) {
-      const ch = x[i];
-      if (ch === '"' && x[i - 1] !== '\\') quote = !quote;
-      if (quote) continue;
-      if (ch === '(') depth++;
-      if (ch === ')' && --depth === 0 && i < x.length - 1) return x;
-    }
-    return x.slice(1, -1);
-  };
+  const unparen = emit.unparen;
   const pad = (d) => '    '.repeat(d);
   const coerce = (e, type) => (type === 'Number' ? n(e) : type === 'Boolean' ? b(e) : s(e));
   const printOf = (value, nl) => {
@@ -188,7 +173,7 @@ export function generateRust(ir, cfg, project) {
   function stmt(st, d) {
     const p = pad(d);
     switch (st.op) {
-      case 'comment': return [p + '// ' + String(st.text).replace(/[\r\n]+/g, ' ')];
+      case 'comment': return [p + MAP.emit('comment', { text: String(st.text).replace(/[\r\n]+/g, ' ') })];
       case 'log': return [p + printOf(st.value, true)];
       case 'cli.print': { const l = printOf(st.value, st.newline); return st.newline ? [p + l] : [p + l, p + 'io::stdout().flush().ok();']; }
       case 'set': return [p + `${rx(st.var)} = ${unparen(coerce(st.value, st.var.type))};`];
@@ -202,7 +187,7 @@ export function generateRust(ir, cfg, project) {
         const cnt = st.count.k === 'num' ? String(Math.max(0, Math.floor(st.count.v))) : `(${unparen(n(st.count))} as i64)`;
         return [p + `for _ in 0..${cnt} {`, ...stmts(st.body, d + 1), p + '}'];
       }
-      case 'wait': uses.add('sleep'); return [p + `thread::sleep(Duration::from_millis(${st.ms.k === 'num' ? String(Math.max(0, Math.round(st.ms.v))) : `${unparen(n(st.ms))} as u64`}));`];
+      case 'wait': uses.add('sleep'); return [p + `${MAP.emit('sleep', { ms: st.ms.k === 'num' ? String(Math.max(0, Math.round(st.ms.v))) : `${unparen(n(st.ms))} as u64` })}`];
       case 'call': {
         const f = fnInfo.get(st.fn);
         if (!f) { problems.push({ block: st.block, msg: `関数「${st.fn}」が定義されていません` }); return [p + `// (undefined function: ${st.fn})`]; }
@@ -210,10 +195,10 @@ export function generateRust(ir, cfg, project) {
         const args = f.params.map((pa, i) => (st.args[i] ? (pa.type === 'num' ? n(st.args[i]) : pa.type === 'bool' ? b(st.args[i]) : s(st.args[i])) : pa.type === 'num' ? '0.0' : pa.type === 'bool' ? 'false' : 'String::new()'));
         return [p + `${f.id}(${['state', ...args].join(', ')});`];
       }
-      case 'cli.exit': return [p + `process::exit(${n(st.code)} as i32);`];
+      case 'cli.exit': return [p + MAP.emit('exit', { code: n(st.code) })];
       case 'cli.write_file':
-        if (st.append) { uses.add('append_file'); return [p + `append_file(${sref(st.path)}, ${sref(st.text)});`]; }
-        return [p + `fs::write(${sref(st.path)}, ${sref(st.text)}).ok();`];
+        if (st.append) uses.add('append_file');
+        return [p + MAP.emit(st.append ? 'append_file' : 'write_file', { path: sref(st.path), text: sref(st.text) })];
       default: problems.push({ msg: `unsupported IR statement: ${st.op}` }); return [p + `// unsupported: ${st.op}`];
     }
   }

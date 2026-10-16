@@ -55,3 +55,32 @@ and expressions `{ k: num|str|bool|var|bin|un|call|<generator> }`. Generator-spe
 * Exported projects must stay ordinary, readable projects that build without Codiram.
 * No Universal IR up front: add IR nodes only when a generator needs them.
 * Generator-specific code lives under `js/targets/<id>/`; `js/targets/index.js` is the only place listing them.
+
+## Contract and shared parts (cost of the next generator)
+
+```
+Generator = manifest + capabilities + validate(project) + generate(project)   // defineGenerator()
+GeneratedProject = { files, problems, root, entry, generator }                // runGenerator()
+```
+
+| Part | File | What you write for a new generator |
+|---|---|---|
+| Contract / registry | `sdk/index.js`, `registry.js` | one `defineGenerator({...})` call. `validate()` (block support + capability check of what the project really uses) is built in; add rules with `check()` |
+| Capabilities | `sdk/capabilities.js`, `sdk/features.js` | a list of ids. `usedCapabilities(project)` / `missingCapabilities()` do the checking, no per-generator error code |
+| Semantic model | `ir.js` (`buildSemanticModel`) + `sdk/common-ir.js` | nothing for common blocks (variables, if, loops, functions, math, text); only `ir` for blocks specific to your target. Not a universal IR: target-only concepts stay `<target>.<op>` |
+| Project template | `sdk/template.js` | `defineProjectTemplate(id, { path: 'text with {{vars}}' })`; `renderProjectTemplate(id, cfg)` then add generated sources |
+| Mapping | `sdk/mapping.js` | `defineMapping({ op: 'target code with {slots}' })` for one-line operations; complex ones stay code |
+| Emitter utilities | `sdk/emit.js` | reuse `identifierNamer`, `snakeCase`, `escapeString`, `unparen`, `indent`, `json`, `projectFile` instead of copying |
+| Verification | `sdk/verify.js` + `generator.verify` | declare required files / patterns / JSON / syntax / optional build command (data, no code) |
+| Tests | `tests/golden/projects.mjs`, `tests/golden.test.mjs` | add the generator to a golden project (or add a golden project); the harness validates, generates, verifies, snapshots the file list and runs the build when the tool is installed. A generator without a golden project fails the test |
+
+### Add a generator — checklist
+1. `js/targets/<id>/index.js`: `defineGenerator` (copy `targets/web.js` for the shape, `targets/rust/index.js` for an IR generator), add it to `js/targets/index.js`.
+2. Project layout → `defineProjectTemplate`; simple operations → `defineMapping`; the rest → emitter code using `sdk/emit.js`.
+3. Target-only blocks: `targets: ['<id>']`, `caps: [...]`, plus `ir` / `irHat` / `irExpr` (see `targets/rust/blocks.js`).
+4. Add a `verify` spec and a golden project entry; run `npm test`.
+5. Move code that a *second* generator also needs into `js/sdk/` (not before).
+
+### Future (not implemented, structure is ready)
+The manifest, capability list, project template, mapping table and verify spec are all plain data, so a Generator Builder
+can later scaffold `js/targets/<id>/` from a form (target, language, capabilities, template, mappings, build command).
