@@ -1,0 +1,179 @@
+// Project data model + helpers. A project is plain JSON:
+// { pages:[{id,name,root:Node}], models:[{id,name,fields,rows}], variables:[], scripts:[] }
+import { uid, clone, sanitizeIdent } from './util.js';
+import { components, blocks } from './registry.js';
+
+export const FIELD_TYPES = ['String', 'Number', 'Boolean', 'Date', 'Array', 'Object'];
+export const VAR_TYPES = ['String', 'Number', 'Boolean'];
+
+export function newPage(name, id) {
+  return {
+    id: id || uid('pg'),
+    name,
+    root: { id: uid('c'), type: 'page', name: 'Page', props: {}, style: { padding: '24', gap: '12' }, children: [] },
+  };
+}
+
+export function emptyProject(name = 'Untitled Project') {
+  return {
+    v: 1, id: uid('p'), name, created: Date.now(), updated: Date.now(),
+    settings: { title: name },
+    pages: [newPage('Main', 'main')],
+    models: [], variables: [], scripts: [],
+  };
+}
+
+export function newModel(project, name = 'Model') {
+  let n = 1, nm = name;
+  const names = new Set(project.models.map((m) => m.name));
+  while (names.has(nm)) nm = name + ++n;
+  return {
+    id: uid('m'), name: nm,
+    fields: [{ name: 'id', type: 'Number' }, { name: 'name', type: 'String' }],
+    rows: [],
+  };
+}
+
+export const nextRowId = (model) => model.rows.reduce((m, r) => Math.max(m, r._id || 0), 0) + 1;
+
+export function defaultFor(type) {
+  return type === 'Number' ? 0 : type === 'Boolean' ? false : type === 'Array' ? [] : type === 'Object' ? {} : '';
+}
+
+// ---------- node tree ----------
+export function walk(node, fn, parent = null) {
+  fn(node, parent);
+  (node.children || []).forEach((c) => walk(c, fn, node));
+}
+
+export function allNodes(project) {
+  const out = [];
+  for (const page of project.pages) walk(page.root, (node, parent) => out.push({ node, parent, page }));
+  return out;
+}
+
+export function findNode(project, id) {
+  for (const page of project.pages) {
+    let hit = null;
+    walk(page.root, (node, parent) => {
+      if (!hit && node.id === id) hit = { node, parent, page, index: parent ? parent.children.indexOf(node) : 0 };
+    });
+    if (hit) return hit;
+  }
+  return null;
+}
+
+export function uniqueName(project, base, extraTaken = new Set()) {
+  const taken = new Set(extraTaken);
+  allNodes(project).forEach(({ node }) => taken.add(node.name));
+  const b = sanitizeIdent(base);
+  let n = 1;
+  while (taken.has(b + n)) n++;
+  return b + n;
+}
+
+export function createNode(project, type) {
+  const def = components.get(type);
+  const d = def.defaults || {};
+  return {
+    id: uid('c'), type,
+    name: uniqueName(project, def.label.replace(/\s+/g, '')),
+    props: clone(d.props || {}), style: clone(d.style || {}),
+    children: [],
+  };
+}
+
+/** Deep copy with new ids and project-unique names (for duplicate / paste / library insert). */
+export function freshClone(project, node) {
+  const copy = clone(node);
+  const taken = new Set();
+  walk(copy, (n) => {
+    n.id = uid('c');
+    const base = n.name.replace(/\d+$/, '') || n.type;
+    n.name = uniqueName(project, base, taken);
+    taken.add(n.name);
+  });
+  return copy;
+}
+
+export function isContainer(node) {
+  return !!components.get(node.type)?.container;
+}
+
+// ---------- blocks / scripts ----------
+export function newBlock(type, args) {
+  const def = blocks.get(type);
+  return {
+    id: uid('b'), type,
+    args: { ...clone(def.defaults || {}), ...(args || {}) },
+    slots: Object.fromEntries((def.slots || []).map((s) => [s.key, []])),
+  };
+}
+
+export function newScript(project, pageId, hatType, args) {
+  const hat = newBlock(hatType, args);
+  return { id: uid('s'), page: pageId, name: '', hat: { type: hat.type, args: hat.args }, body: [] };
+}
+
+export function scriptTitle(project, script) {
+  if (script.name) return script.name;
+  const def = blocks.get(script.hat.type);
+  return def?.summary ? def.summary(script.hat.args, project) : (def?.title || script.hat.type);
+}
+
+/** Visit every block in a stack (depth-first). fn(block, arr, index, parentBlock) */
+export function walkBlocks(arr, fn, parent = null) {
+  arr.forEach((b, i) => {
+    fn(b, arr, i, parent);
+    Object.values(b.slots || {}).forEach((s) => walkBlocks(s, fn, b));
+  });
+}
+
+export function findBlock(script, id) {
+  let hit = null;
+  walkBlocks(script.body, (b, arr, idx, parent) => { if (b.id === id) hit = { block: b, arr, idx, parent }; });
+  return hit;
+}
+
+export function freshBlockClone(b) {
+  const c = clone(b);
+  const re = (x) => { x.id = uid('b'); Object.values(x.slots || {}).forEach((s) => s.forEach(re)); };
+  re(c);
+  return c;
+}
+
+export const fnNames = (project) =>
+  project.scripts.filter((s) => s.hat.type === 'onFunction' && s.hat.args.name).map((s) => s.hat.args.name);
+
+// ---------- static checks ("Problems") ----------
+export function lint(project) {
+  const problems = [];
+  const nodes = new Map(allNodes(project).map(({ node }) => [node.id, node]));
+  const models = new Set(project.models.map((m) => m.name));
+  const vars = new Set(project.variables.map((v) => v.name));
+  const pages = new Set(project.pages.map((p) => p.id));
+  const fns = new Set(fnNames(project));
+  const check = (b, script) => {
+    const def = blocks.get(b.type);
+    if (!def) { problems.push({ script: script.id, block: b.id, msg: `不明なブロック: ${b.type}` }); return; }
+    for (const [k, f] of Object.entries(def.fields || {})) {
+      const v = b.args[k];
+      const bad = (m) => problems.push({ script: script.id, block: b.id, msg: m });
+      if (f.t === 'comp') { if (!v) bad('対象のUI部品が未選択です'); else if (!nodes.has(v)) bad('対象のUI部品が見つかりません(削除された可能性)'); }
+      if (f.t === 'model') { if (!v) bad('データモデルが未選択です'); else if (!models.has(v)) bad(`データモデル「${v}」が存在しません`); }
+      if (f.t === 'var') { if (!v) bad('変数が未選択です'); else if (!vars.has(v)) bad(`変数「${v}」が存在しません`); }
+      if (f.t === 'page' && v && !pages.has(v)) bad('移動先のページが見つかりません');
+      if (f.t === 'page' && !v && f.required) bad('ページが未選択です');
+      if (f.t === 'fn') { if (!v) bad('関数が未選択です'); else if (!fns.has(v)) bad(`関数「${v}」が定義されていません`); }
+      if (f.t === 'fieldname' && b.args.model) {
+        const m = project.models.find((x) => x.name === b.args.model);
+        if (m && v && !m.fields.some((x) => x.name === v)) bad(`フィールド「${v}」が ${m.name} に存在しません`);
+      }
+    }
+  };
+  for (const s of project.scripts) {
+    check({ id: 'hat:' + s.id, type: s.hat.type, args: s.hat.args }, s);
+    walkBlocks(s.body, (b) => check(b, s));
+  }
+  return problems;
+}
