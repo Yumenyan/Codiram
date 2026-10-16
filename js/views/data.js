@@ -2,7 +2,7 @@
 import { h, sanitizeIdent, uid } from '../util.js';
 import { blocks } from '../registry.js';
 import { store, ui, commit } from '../store.js';
-import { FIELD_TYPES, VAR_TYPES, newModel, nextRowId, defaultFor, walkBlocks, allNodes } from '../model.js';
+import { FIELD_TYPES, VAR_TYPES, newModel, nextRowId, defaultFor, walkBlocks, allNodes, defaultInitial } from '../model.js';
 import { dialog, confirmDlg, toast } from '../ui-kit.js';
 import { tf } from '../i18n.js';
 import { download } from '../util.js';
@@ -172,10 +172,29 @@ function varsEditor() {
           if (p.variables.some((x, j) => j !== i && x.name === nn)) { toast('同名の変数があります'); e.target.value = v.name; return; }
           commit('Rename variable', (pp) => { renameRefs(pp, 'var', v.name, nn); pp.variables[i].name = nn; });
         } })),
-        h('td', {}, h('select', { class: 'sel', onchange: (e) => edit('Variable type', (vs) => { vs[i].type = e.target.value; }) }, VAR_TYPES.map((t) => h('option', { selected: t === v.type }, t)))),
-        h('td', {}, h('input', { class: 'inp', value: v.initial, oninput: (e) => edit('Variable initial', (vs) => { vs[i].initial = e.target.value; }, { coalesce: 'vi' + i, origin: 'grid' }) })),
+        h('td', {}, h('select', { class: 'sel', onchange: (e) => { edit('Variable type', (vs) => { vs[i].type = e.target.value; if (!validInitial(e.target.value, vs[i].initial)) vs[i].initial = defaultInitial(e.target.value); }); } }, VAR_TYPES.map((t) => h('option', { selected: t === v.type }, t)))),
+        h('td', {}, initialInput(v, i, edit)),
         h('td', {}, h('button', { class: 'icon-btn', title: '削除', onclick: () => edit('Delete variable', (vs) => vs.splice(i, 1)) }, '✕')))))),
-    h('button', { class: 'btn small', onclick: () => edit('Add variable', (vs) => { let n = 1; while (vs.some((x) => x.name === 'var' + n)) n++; vs.push({ name: 'var' + n, type: 'Number', initial: '0' }); }) }, '＋ Variable'));
+    h('div', { class: 'row-gap' }, ['Number', 'String', 'Boolean', 'Array', 'Object'].map((t) =>
+      h('button', { class: 'btn small', onclick: () => edit('Add variable', (vs) => { let n = 1; while (vs.some((x) => x.name === 'var' + n)) n++; vs.push({ name: 'var' + n, type: t, initial: defaultInitial(t) }); }) }, '＋ ' + t))));
+}
+
+const validInitial = (type, v) => {
+  v = String(v ?? '');
+  if (type === 'Number') return v.trim() !== '' && !Number.isNaN(Number(v));
+  if (type === 'Boolean') return v === 'true' || v === 'false';
+  if (type === 'Array' || type === 'Object') { try { const j = JSON.parse(v); return type === 'Array' ? Array.isArray(j) : !!j && typeof j === 'object' && !Array.isArray(j); } catch { return false; } }
+  return true;
+};
+
+/** initial-value editor that matches the variable's type (checkbox for Boolean, number box, JSON for Array/Object) */
+function initialInput(v, i, edit) {
+  const set = (val, typing) => edit('Variable initial', (vs) => { vs[i].initial = val; }, typing ? { coalesce: 'vi' + i, origin: 'grid' } : undefined);
+  if (v.type === 'Boolean') return h('select', { class: 'sel', onchange: (e) => set(e.target.value) }, ['false', 'true'].map((x) => h('option', { selected: String(v.initial) === x }, x)));
+  const inp = h('input', { class: 'inp' + (v.type === 'Array' || v.type === 'Object' ? ' mono' : ''), type: v.type === 'Number' ? 'number' : 'text', step: 'any', value: v.initial, placeholder: v.type === 'Array' ? '[1, 2, 3]' : v.type === 'Object' ? '{"a": 1}' : '',
+    oninput: (e) => { inp.classList.toggle('err', !validInitial(v.type, e.target.value)); set(e.target.value, true); } });
+  inp.classList.toggle('err', !validInitial(v.type, v.initial));
+  return inp;
 }
 
 // ---------- assets (images / audio / video bundled with the app) ----------

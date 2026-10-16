@@ -5,7 +5,8 @@ import { components, blocks, blockSupports, targets, activeTargetId } from './re
 import { tf, t as tt } from './i18n.js';
 
 export const FIELD_TYPES = ['String', 'Number', 'Boolean', 'Date', 'Array', 'Object', 'Enum', 'Relation'];
-export const VAR_TYPES = ['String', 'Number', 'Boolean'];
+export const VAR_TYPES = ['String', 'Number', 'Boolean', 'Array', 'Object'];
+export const defaultInitial = (type) => ({ Number: '0', Boolean: 'false', Array: '[]', Object: '{}' }[type] ?? '');
 
 export function newPage(name, id) {
   return {

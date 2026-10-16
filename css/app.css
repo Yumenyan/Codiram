@@ -251,3 +251,21 @@ textarea.inp { width: 100%; resize: vertical; }
 .target-card { display: flex; flex-direction: column; text-align: left; gap: 2px; padding: 10px 14px; border: 1px solid var(--border); background: var(--panel); border-radius: 10px; }
 .target-card.on { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 1px var(--accent); }
 .form .errs { color: var(--danger); font-size: 12px; }
+
+/* ---- keep wide blocks inside their parent ---- */
+.script-card, .block, .b-head, .stack, .slot, .b-parts { min-width: 0; max-width: 100%; }
+.b-head { flex-wrap: wrap; }
+.b-parts { flex: 1 1 0; flex-wrap: wrap; row-gap: 4px; }
+.b-txt { white-space: normal; }
+.rslot { max-width: 100%; flex-wrap: wrap; }
+.rep { max-width: 100%; flex-wrap: wrap; row-gap: 2px; }
+.f, .f-expr { max-width: min(100%, 460px); }
+.cond, .values { max-width: 100%; }
+.cond-row { flex-wrap: wrap; border-radius: 14px; max-width: 100%; }
+.val { flex-wrap: wrap; }
+.f.code { min-width: min(280px, 100%); max-width: 100%; }
+.rep-dup { font-size: 10px; }
+.workspace { overflow-x: auto; }
+
+#topbar button { white-space: nowrap; }
+@media (max-width: 1320px) { .target-chip span, .proj-btn small { display: none; } #save-status { min-width: 0; } }

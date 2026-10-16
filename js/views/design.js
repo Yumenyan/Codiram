@@ -3,8 +3,8 @@ import { h, esc, clone, sanitizeIdent } from '../util.js';
 import { components } from '../registry.js';
 import { CATS, COMING_SOON, renderNode, propSchema } from '../components.js';
 import { store, ui, commit, nav, getLibrary, setLibrary } from '../store.js';
-import { findNode, createNode, freshClone, isContainer, newPage, uniqueName, newScript, walk, allNodes, duplicatePage } from '../model.js';
-import { promptText, menu, toast, confirmDlg } from '../ui-kit.js';
+import { findNode, createNode, freshClone, isContainer, newPage, uniqueName, newScript, walk, allNodes, duplicatePage, defaultInitial } from '../model.js';
+import { promptText, menu, toast, confirmDlg, promptVariable } from '../ui-kit.js';
 import { BASE_CSS } from '../components.js';
 import { fontSelect } from './fontpicker.js';
 import { fontStack, googleFontsUrl } from '../fonts.js';
@@ -507,10 +507,10 @@ function propRow(node, pr) {
       h('option', { value: '' }, '(なし)'), proj().models.map((m) => h('option', { value: m.name, selected: val === m.name }, m.name))); break;
     case 'var': input = h('select', { class: 'sel', 'data-prop': pr.k, onchange: async (e) => {
       if (e.target.value !== '__new') return set(e.target.value);
-      const name = await promptText('新しい変数', '', '変数名 (英数字・日本語・_)');
-      if (!name) { renderProps(); return; }
-      const vn = sanitizeIdent(name);
-      commit('Add variable', (p) => { if (!p.variables.some((v) => v.name === vn)) p.variables.push({ name: vn, type: 'String', initial: '' }); findNode(p, node.id).node.props[pr.k] = vn; });
+      const nv = await promptVariable(node.type === 'checkbox' ? 'Boolean' : null);
+      if (!nv) { renderProps(); return; }
+      const vn = sanitizeIdent(nv.name);
+      commit('Add variable', (p) => { if (!p.variables.some((v) => v.name === vn)) p.variables.push({ name: vn, type: nv.type, initial: defaultInitial(nv.type) }); findNode(p, node.id).node.props[pr.k] = vn; });
     } }, h('option', { value: '' }, '(なし)'), proj().variables.map((v) => h('option', { value: v.name, selected: val === v.name }, v.name)), h('option', { value: '__new' }, '＋ 新規変数…')); break;
     case 'color': {
       const txt = h('input', { class: 'inp', value: val ?? '', placeholder: '(default)', 'data-prop': pr.k, oninput: (e) => { set(e.target.value, live); sw.value = toHex(e.target.value); } });

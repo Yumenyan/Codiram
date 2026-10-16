@@ -3,11 +3,11 @@ import { h, clone, sanitizeIdent } from '../util.js';
 import { blocks, BLOCK_CATS, catOf } from '../registry.js';
 import { COND_OPS, defaultCond } from '../blocks.js';
 import { store, ui, commit, nav } from '../store.js';
-import { allNodes, newBlock, newScript, scriptTitle, findBlock, walkBlocks, freshBlockClone, fnNames, lint, findNode, scriptsFor } from '../model.js';
+import { allNodes, newBlock, newScript, scriptTitle, findBlock, walkBlocks, freshBlockClone, fnNames, lint, findNode, scriptsFor, defaultInitial } from '../model.js';
 import { blockSupports, activeTargetId, activeTarget } from '../registry.js';
 import { ITEMS, BLOCKS, SOUNDS } from '../targets/minecraft/ids.js';
 import { components } from '../registry.js';
-import { promptText, menu, toast, confirmDlg } from '../ui-kit.js';
+import { promptText, menu, toast, confirmDlg, promptVariable } from '../ui-kit.js';
 import { L, getLang, isBi, tf } from '../i18n.js';
 import { J } from '../i18n-helpers.js';
 import { matchAction } from '../shortcuts.js';
@@ -318,7 +318,12 @@ function sel(options, value, onChange, placeholder = '(選択)') {
 function exprSlot(ctx, id, vpath, v, ph) {
   const wrap = h('span', { class: 'rslot' });
   if (isRep(v)) wrap.append(repEl(ctx, id, vpath, v.$b));
-  else wrap.append(textInput(v, ph, (x) => setPath(ctx, id, vpath, x, true), 'f f-expr', true, () => { lastFocus = { sid: ctx.s.id, id, vpath }; }));
+  else {
+    const inp = textInput(v, ph, (x) => setPath(ctx, id, vpath, x, true), 'f f-expr', true, () => { lastFocus = { sid: ctx.s.id, id, vpath }; });
+    // Ctrl+V pastes a copied value block instead of text
+    inp.addEventListener('keydown', (e) => { if (ui.clip?.kind === 'rep' && matchAction(e, 'paste')) { e.preventDefault(); lastFocus = { sid: ctx.s.id, id, vpath }; pasteRep(); } });
+    wrap.append(inp);
+  }
   wrap.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('application/x-codiram-rep')) { e.preventDefault(); e.stopPropagation(); wrap.classList.add('over'); } });
   wrap.addEventListener('dragleave', () => wrap.classList.remove('over'));
   wrap.addEventListener('drop', (e) => { wrap.classList.remove('over'); dropRep(ctx, e, id, vpath); });
@@ -330,10 +335,16 @@ function repEl(ctx, id, vpath, rb) {
   if (!def) return h('span', { class: 'rep err' }, '?');
   const cat = catOf(def.cat), inner = [...vpath, '$b', 'args'];
   return h('span', { class: 'rep' + (def.bool ? ' hex' : ''), style: { '--cat': cat.color }, draggable: 'true', title: blockTitle(def),
-    ondragstart: (e) => { e.stopPropagation(); e.dataTransfer.setData('application/x-codiram-rep', JSON.stringify({ kind: 'move', id, path: vpath })); e.dataTransfer.effectAllowed = 'move'; document.body.classList.add('dragging-blocks'); },
+    ondragstart: (e) => {
+      e.stopPropagation();
+      const copy = e.altKey || e.ctrlKey || e.metaKey; // Alt / Ctrl + drag duplicates
+      e.dataTransfer.setData('application/x-codiram-rep', JSON.stringify(copy ? { kind: 'copy', block: rb } : { kind: 'move', id, path: vpath }));
+      e.dataTransfer.effectAllowed = 'copyMove'; document.body.classList.add('dragging-blocks');
+    },
     ondragend: () => document.body.classList.remove('dragging-blocks') },
   h('span', { class: 'b-ico shape-' + cat.shape }, def.icon),
   repParts(def).map((part) => (part.f !== undefined && !isBi(part) ? fieldEl(ctx, id, def, part.f, rb.args, inner) : L(part) === '' ? null : h('span', { class: 'b-txt' }, part))),
+  h('button', { class: 'rep-x rep-dup', title: '複製(クリップボードへ。入力欄を選んで Ctrl+V / Alt+ドラッグでも複製)', onclick: (e) => { e.stopPropagation(); ui.clip = { kind: 'rep', data: clone(rb) }; toast('値ブロックをコピーしました。入力欄を選んで Ctrl+V で貼り付け'); } }, '⧉'),
   h('button', { class: 'rep-x', title: '値ブロックを外す', onclick: (e) => { e.stopPropagation(); setPath(ctx, id, vpath, ''); } }, '✕'));
 }
 
@@ -344,6 +355,7 @@ function dropRep(ctx, e, id, vpath) {
   document.body.classList.remove('dragging-blocks');
   const d = JSON.parse(raw);
   if (d.kind === 'new') { setPath(ctx, id, vpath, { $b: newRep(d.type, d.args) }); return; }
+  if (d.kind === 'copy') { setPath(ctx, id, vpath, { $b: freshRep(d.block) }); return; }
   if (d.id === id && vpath.join('.').startsWith(d.path.join('.'))) return; // not into itself
   commit('Move value block', (p) => {
     const sc = p.scripts.find((x) => x.id === ctx.s.id);
@@ -352,6 +364,23 @@ function dropRep(ctx, e, id, vpath) {
     setIn(sroot, d.path, '');
     setIn(rootOf(sc, id).args, vpath, val);
   });
+}
+
+/** deep copy of a value block with new ids (nested value blocks too) */
+function freshRep(rb) {
+  const c = clone(rb);
+  const re = (x) => { if (x && typeof x === 'object') { if (x.$b) { x.$b.id = 'r' + Math.random().toString(36).slice(2, 8); } Object.values(x).forEach(re); } };
+  c.id = 'r' + Math.random().toString(36).slice(2, 8);
+  re(c.args);
+  return c;
+}
+
+export function pasteRep() {
+  if (ui.clip?.kind !== 'rep') return false;
+  const lf = lastFocus, s = script();
+  if (!lf || !s || lf.sid !== s.id || (!lf.id.startsWith('hat:') && !findBlock(s, lf.id))) { toast('貼り付ける式の入力欄を先に選んでください'); return true; }
+  setPath({ s }, lf.id, lf.vpath, { $b: freshRep(ui.clip.data) });
+  return true;
 }
 
 export function insertRepAtFocus(type) {
@@ -397,11 +426,11 @@ function fieldEl(ctx, id, def, key, args, path) {
       const list = p.variables.filter((x) => !vt || x.type === vt || x.name === v);
       return h('select', { class: 'f f-sel', onchange: async (e) => {
         if (e.target.value !== '__new') return set(e.target.value);
-        const name = await promptText('新しい変数', '', '変数名');
-        if (!name) { renderLogic(root); return; }
-        const vn = sanitizeIdent(name);
+        const nv = await promptVariable(vt);
+        if (!nv) { renderLogic(root); return; }
+        const vn = sanitizeIdent(nv.name);
         commit('Add variable', (pp) => {
-          if (!pp.variables.some((x) => x.name === vn)) pp.variables.push({ name: vn, type: vt || 'Number', initial: vt === 'Array' ? '[]' : vt === 'Object' ? '{}' : '0' });
+          if (!pp.variables.some((x) => x.name === vn)) pp.variables.push({ name: vn, type: nv.type, initial: defaultInitial(nv.type) });
           const sc = pp.scripts.find((x) => x.id === ctx.s.id);
           setIn(rootOf(sc, id).args, vpath, vn);
         });
@@ -512,7 +541,7 @@ export function duplicateSel() { if (copySel()) pasteSel(); }
 export function logicKey(e) {
   if (matchAction(e, 'delete')) return deleteSel();
   if (matchAction(e, 'copy')) return copySel();
-  if (matchAction(e, 'paste')) return pasteSel();
+  if (matchAction(e, 'paste')) return ui.clip?.kind === 'rep' ? pasteRep() : pasteSel();
   if (matchAction(e, 'duplicate')) { duplicateSel(); return true; }
   if (matchAction(e, 'selectall')) { const s = script(); if (!s) return false; const all = new Set(); walkBlocks(s.body, (b) => all.add(b.id)); ui.selBlocks = all; markSel(); return true; }
   if (e.key === 'Escape') { clearSel(); return true; }

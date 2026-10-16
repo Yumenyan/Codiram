@@ -48,3 +48,12 @@ export function menu(anchor, items) {
   setTimeout(() => document.addEventListener('mousedown', off, true));
   document.body.append(m);
 }
+
+/** Dialog to create a variable: name + type (type fixed when `fixedType` is given). Returns { name, type } or null. */
+export async function promptVariable(fixedType) {
+  const name = h('input', { class: 'inp', style: { width: '100%' }, placeholder: '変数名 (英数字・日本語・_)' });
+  const type = h('select', { class: 'sel', disabled: !!fixedType }, ['Number', 'String', 'Boolean', 'Array', 'Object'].map((t) => h('option', { selected: t === (fixedType || 'Number') }, t)));
+  name.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.closest('.dialog').querySelector('.primary').click(); });
+  const ok = await dialog({ title: '新しい変数', body: h('div', { class: 'form' }, h('label', {}, '変数名', name), h('label', {}, '型', type)), actions: [{ label: 'キャンセル', value: false }, { label: 'OK', primary: true, value: 'ok' }] });
+  return ok === 'ok' && name.value.trim() ? { name: name.value.trim(), type: type.value } : null;
+}

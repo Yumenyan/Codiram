@@ -166,6 +166,11 @@ addPairs([
   ['Block id can only be used in block events (right-click / break / place)', 'ブロックIDは ブロックのイベント(右クリック/壊す/置く)でのみ使えます'],
 ]);
 
+addPairs([
+  ['Variable type', '型'], ['Copied the value block. Select an input field and press Ctrl+V to paste', '値ブロックをコピーしました。入力欄を選んで Ctrl+V で貼り付け'],
+  ['Select the input field to paste into first', '貼り付ける式の入力欄を先に選んでください'], ['Variable name (letters, digits, _)', '変数名 (英数字・日本語・_)'],
+]);
+
 // Code strings that differ slightly from the canonical English key
 alias('New Project — テンプレートを選択', 'New Project — choose a template');
 alias('履歴 History', 'History');
@@ -176,4 +181,7 @@ alias('Components パネルの表示/非表示', 'Toggle Components panel');
 alias('Target — 生成する実行環境', 'Target — the environment to generate for');
 alias('Logic を編集すると、ここのコードが更新されます(読み取り専用)', 'Edit Logic and the code here updates (read-only)');
 alias('コピー', 'Copy');
+alias('値ブロックをコピーしました。入力欄を選んで Ctrl+V で貼り付け', 'Copied the value block. Select an input field and press Ctrl+V to paste');
+alias('貼り付ける式の入力欄を先に選んでください', 'Select the input field to paste into first');
+alias('型', 'Variable type');
 alias('Properties パネルの表示/非表示', 'Toggle Properties panel');
