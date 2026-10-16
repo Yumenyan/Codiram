@@ -91,8 +91,10 @@ export async function openTargetSettings(targetId, { isNew = false, onDone } = {
       : h('input', { class: 'inp' + (f.key === 'modId' || f.key === 'package' ? ' mono' : ''), value: cfg[f.key] ?? '', placeholder: f.ph || '', oninput: (e) => { cfg[f.key] = e.target.value; } });
     return h('label', {}, L(f.label), input);
   });
+  const commentSel = h('select', { class: 'sel', onchange: (e) => { commentLang = e.target.value; } }, [['auto', '自動(表示言語に合わせる)'], ['ja', '日本語'], ['en', 'English']].map(([v, l]) => h('option', { value: v, selected: (p.settings?.commentLang || 'auto') === v }, l)));
+  let commentLang = p.settings?.commentLang || 'auto';
   const ok = await dialog({ title: tf('{0} — 設定', target.icon + ' ' + L(target.name)), wide: true,
-    body: h('div', { class: 'form' }, h('label', {}, 'プロジェクト名', name), ...fields, errs, generatorInfo(target)),
+    body: h('div', { class: 'form' }, h('label', {}, 'プロジェクト名', name), ...fields, h('label', {}, '生成コードのコメントの言語', commentSel), errs, generatorInfo(target)),
     actions: [{ label: 'キャンセル', value: false }, { label: 'OK', primary: true, value: 'ok', onClick: () => {
       const probs = target.validateConfig ? target.validateConfig(cfg) : [];
       errs.textContent = probs.join(' / ');
@@ -101,6 +103,7 @@ export async function openTargetSettings(targetId, { isNew = false, onDone } = {
   if (ok !== 'ok') return false;
   commit(isNew ? 'Add target' : 'Target settings', (pp) => {
     pp.name = name.value.trim() || pp.name;
+    pp.settings = { ...pp.settings, commentLang };
     const i = pp.targets.findIndex((x) => x.type === targetId);
     if (i >= 0) pp.targets[i] = cfg; else pp.targets.push(cfg);
   });

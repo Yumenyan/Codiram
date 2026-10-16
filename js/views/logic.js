@@ -139,6 +139,7 @@ function renderWorkspace() {
     h('button', { class: 'icon-btn', title: 'Scripts パネル', onclick: () => { ui.navOpen.left = !ui.navOpen.left; renderLogic(root); } }, '☰'),
     h('b', {}, 'Logic'), h('span', { class: 'sp' }),
     h('span', { class: 'muted small' }, 'ブロックをドラッグ / クリックで追加 · Ctrl+クリックで複数選択'),
+    h('button', { class: 'btn small', title: 'よく使う処理のテンプレ / 自作テンプレの登録', onclick: async () => { const { openSnippets } = await import('./snippets.js'); await openSnippets({ onInsert: () => renderLogic(root) }); renderLogic(root); } }, '📋 Snippets'),
     h('button', { class: 'icon-btn', title: 'Blocks パネル', onclick: () => { ui.navOpen.right = !ui.navOpen.right; renderLogic(root); } }, '▤'));
   W.append(toolbar);
   if (!s) {

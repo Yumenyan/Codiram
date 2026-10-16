@@ -1150,6 +1150,19 @@ window.__codiramReport = function (e) {
     orig.apply(console, arguments);
   };
 });
+// variable monitor: report every change of "vars" (also inside arrays / objects) together with the block that was running
+(function () {
+  var last = {}, first = true;
+  function clip(v) { var t = JSON.stringify(v); return t === undefined ? 'undefined' : t.length > 200 ? t.slice(0, 200) + '…' : t; }
+  setInterval(function () {
+    if (typeof vars === 'undefined') return;
+    Object.keys(vars).forEach(function (k) {
+      var now = clip(vars[k]);
+      if (first || last[k] !== now) { try { parent.postMessage({ codiram: 'var', name: k, old: first ? undefined : last[k], value: now, block: __cur, t: Date.now() }, '*'); } catch (e) { /* ignore */ } last[k] = now; }
+    });
+    first = false;
+  }, 120);
+})();
 window.addEventListener('error', function (ev) { window.__codiramReport(ev.error || ev.message); });
 window.addEventListener('unhandledrejection', function (ev) { window.__codiramReport(ev.reason); });
 </script>` : '';

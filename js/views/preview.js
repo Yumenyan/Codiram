@@ -6,8 +6,10 @@ import { generate, bundleInline } from '../generator.js';
 import { findBlock } from '../model.js';
 import { resolveErrors, gotoBlock } from './logic.js';
 
-let root, frame, errBox, logBox, running = false, width = 'full';
+let root, frame, errBox, logBox, monBox, running = false, width = 'full';
 const logs = [];
+/** variable monitor: current values + history of changes (filled from the preview iframe) */
+const watch = { current: new Map(), history: [], paused: false, started: 0 };
 
 export function renderPreview(container) {
   root = container;
@@ -16,6 +18,7 @@ export function renderPreview(container) {
   frame = h('iframe', { class: 'frame', title: 'Preview', sandbox: 'allow-scripts allow-modals allow-forms allow-popups allow-downloads' });
   errBox = h('div', { class: 'errbox' });
   logBox = h('div', { class: 'logbox' });
+  monBox = h('div', { class: 'monbox' });
   frame.addEventListener('load', () => { try { frame.contentWindow.focus(); } catch { /* ignore */ } }); // so keyboard games work immediately
   root.append(
     h('div', { class: 'toolbar' },
@@ -29,8 +32,10 @@ export function renderPreview(container) {
       h('button', { class: 'btn small', onclick: () => nav.go('design') }, '✎ Edit')),
     h('div', { class: 'frame-wrap' }, frame),
     errBox,
+    h('details', { class: 'console', open: true }, h('summary', {}, '変数モニター / Variables', h('button', { class: 'mini', onclick: (e) => { e.preventDefault(); watch.paused = !watch.paused; renderMonitor(); } }, watch.paused ? '▶ 再開' : '⏸ 一時停止'), h('button', { class: 'mini', onclick: (e) => { e.preventDefault(); watch.history.length = 0; watch.current.clear(); renderMonitor(); } }, 'クリア')), monBox),
     h('details', { class: 'console' }, h('summary', {}, 'Console', h('button', { class: 'mini', onclick: (e) => { e.preventDefault(); logs.length = 0; renderLogs(); } }, 'クリア')), logBox));
   renderLogs();
+  renderMonitor();
   run();
 }
 
@@ -39,6 +44,7 @@ function sizeFrame() { if (frame) frame.style.width = width === 'full' ? '100%' 
 export function run() {
   if (!frame) return;
   ui.errors = [];
+  watch.current.clear(); watch.history.length = 0; watch.started = Date.now(); renderMonitor();
   logs.length = 0;
   renderLogs();
   const files = generate(store.project, { debug: true, persist: false });
@@ -74,7 +80,28 @@ function renderErrors() {
   });
 }
 
+function renderMonitor() {
+  if (!monBox) return;
+  monBox.textContent = '';
+  const cur = [...watch.current.entries()];
+  monBox.append(
+    h('div', { class: 'mon-vars' }, cur.length ? cur.map(([k, v]) => h('span', { class: 'mon-var', title: v }, h('b', {}, k), ' = ', h('code', {}, v.length > 40 ? v.slice(0, 40) + '…' : v))) : h('span', { class: 'muted small' }, '(変数がありません / 実行すると表示されます)')),
+    h('div', { class: 'mon-hist' }, watch.history.slice(-100).reverse().map((c) => {
+      const s = c.block && store.project.scripts.find((x) => c.block === 'hat:' + x.id || findBlock(x, c.block));
+      return h('div', { class: 'mon-row' + (s ? ' link' : ''), onclick: () => s && gotoBlock(s.id, c.block.startsWith('hat:') ? null : c.block) },
+        h('span', { class: 'muted small' }, ((c.t - watch.started) / 1000).toFixed(2) + 's'), h('b', {}, c.name), h('code', {}, (c.old === undefined ? '' : c.old + ' → ') + c.value), s ? h('span', { class: 'muted small' }, '↪ ' + (s.name || s.hat.type)) : null);
+    })));
+}
+
 addEventListener('message', (e) => {
+  if (e.data && e.data.codiram === 'var') {
+    if (watch.paused) return;
+    watch.current.set(e.data.name, e.data.value);
+    if (e.data.old !== undefined) watch.history.push(e.data);
+    if (watch.history.length > 500) watch.history.splice(0, 100);
+    renderMonitor();
+    return;
+  }
   if (e.data && e.data.codiram === 'log') { logs.push({ level: e.data.level, text: e.data.text }); renderLogs(); return; }
   if (!e.data || e.data.codiram !== 'error') return;
   ui.errors.push({ block: e.data.block, message: e.data.message });

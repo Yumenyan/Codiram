@@ -33,6 +33,10 @@ Codiram は **Generator** を選んで、同じビジュアルなロジックか
 * 右上のターゲットチップから Target Settings(Generator 情報・対応ブロック数も表示)、ターゲットの追加・切替ができます
 * Export したプロジェクトは Codiram なしで開発・ビルドできる普通のプロジェクトです
 
+**全 Generator:** Web / Static Web / HTML・CSS / Vite / デスクトップ(Tauri) / Rust CLI / Python / Node.js / JavaScript / TypeScript / Godot / VS Code 拡張 / Discord Bot / SQL / SQLite / JSON データパイプライン / REST API / Node サーバー / OS ブートローダー。Export 時に **GitHub Actions** のワークフローも追加できます。
+
+**便利機能:** プロジェクト全体検索(Ctrl+Shift+F)・コマンドパレット(Ctrl+K)・Snippets(実装テンプレ。自作登録・共有可)・処理データ(AI が書いた JSON)の読み込み/書き出し・プレビューの変数モニター・Generator Library / AI Export(🧰 Tools)。JSON ファイルはウィンドウにドロップするだけで読み込めます。
+
 > Minecraft Mod Generator(Modiram)は **一時停止中** です。コードは残してあり既存の Minecraft プロジェクトは開けますが、新規作成の選択肢には出ません。将来 Generator SDK 上の Generator として再開する予定です(MCreator など成熟したツールを当面は利用)。
 
 ### (保留中)Minecraft Mod の最初の成功ルート

@@ -22,6 +22,10 @@ import { matchAction } from './shortcuts.js';
 import { openShortcuts, openPlugins, openTargetSettings } from './views/prefs.js';
 import { renderOutput } from './views/output.js';
 import { loadInstalledPlugins } from './plugins.js';
+import { openSearch } from './views/search.js';
+import { openPalette } from './views/palette.js';
+import { buildAiPack } from './sdk/ai-export.js';
+import { makeZip } from './zip.js';
 import { LANGS, getLang, setLang, tf, t, L } from './i18n.js';
 import './i18n-dict.js';
 import { fontSelect, colorField } from './views/fontpicker.js';
@@ -136,7 +140,43 @@ function targetChip() {
   } }, t.icon, h('span', {}, L(t.name)), h('small', {}, '▾'));
 }
 
+/** every action of the app as a command (palette + Tools menu) */
+function commands() {
+  const p = store.project, inProject = ui.view !== 'start' && !!p;
+  const lazy = (path, fn) => async () => { const m = await import(path); await m[fn](); renderTopbar(); };
+  const list = [];
+  if (inProject) {
+    viewsOf().forEach((v) => list.push({ label: tf('{0} 画面へ移動', viewLabel(v)), keywords: v, run: () => nav.go(v) }));
+    list.push(
+      { label: '実行 / プレビュー', hint: 'F5', keywords: 'run preview', run: () => nav.run() },
+      { label: '保存', hint: 'Ctrl+S', keywords: 'save', run: () => { saveNow(); toast('✓ 保存しました'); } },
+      { label: '元に戻す', hint: 'Ctrl+Z', keywords: 'undo', run: doUndo }, { label: 'やり直し', hint: 'Ctrl+Y', keywords: 'redo', run: doRedo },
+      { label: 'Export(書き出し)', keywords: 'export zip download', run: () => { saveNow(); openExport(store.project); } },
+      { label: 'プロジェクト全体を検索', hint: 'Ctrl+Shift+F', keywords: 'search find grep', run: () => openSearch() },
+      { label: 'Snippets(実装テンプレ)を開く', keywords: 'snippet template テンプレ', run: lazy('./views/snippets.js', 'openSnippets') },
+      { label: '処理データを読み込む(AI の JSON)', keywords: 'import process json ai', run: lazy('./views/process.js', 'openProcessImport') },
+      { label: '処理データを書き出す(読みやすい JSON)', keywords: 'export process json', run: lazy('./views/process.js', 'openProcessExport') },
+      { label: 'プロジェクト設定', keywords: 'settings', run: settings },
+      { label: 'プロジェクトファイル(.json)を書き出し', run: () => download((p.name || 'project') + '.codiram.json', JSON.stringify(p, null, 2), 'application/json') });
+    GeneratorRegistry.list().filter((g) => p.targets.some((c) => c.type === g.id) && g.id !== activeTargetId(p)).forEach((g) => list.push({ label: tf('ターゲットを {0} に切り替え', L(g.name)), keywords: 'target generator ' + g.id, run: () => { setActiveTarget(g.id); nav.go(viewsOf().includes(ui.view) ? ui.view : 'logic'); renderTopbar(); } }));
+  }
+  list.push(
+    { label: '新しいプロジェクト', keywords: 'new project', run: () => { if (store.project) saveNow(); newDialog(); } },
+    { label: 'プロジェクト一覧', keywords: 'projects start home', run: () => { if (store.project) saveNow(); nav.go('start'); } },
+    { label: 'Generator Library(Generator の一覧・管理)', keywords: 'generator library import export validate', run: lazy('./views/library.js', 'openLibrary') },
+    { label: 'Generator Builder(Generator を作る)', keywords: 'generator builder definition', run: lazy('./views/builder.js', 'openBuilder') },
+    { label: 'AI Export(AI 向け参考資料 ZIP)', keywords: 'ai export pack', run: () => { download('codiram-ai-pack.zip', makeZip(buildAiPack({ generatorId: store.project ? activeTargetId(store.project) : 'web', project: store.project })), 'application/zip'); toast('AI パックを書き出しました'); } },
+    { label: 'プラグイン', keywords: 'plugins', run: () => openPlugins(() => mount()) },
+    { label: 'キーボードショートカット', keywords: 'keyboard shortcuts', run: () => openShortcuts() },
+    { label: '言語を切り替え(日本語 / English)', keywords: 'language', run: () => { setLang(getLang() === 'ja' ? 'en' : 'ja'); mount(); renderTopbar(); } },
+    { label: 'ライト / ダークを切り替え', keywords: 'theme dark light', run: () => { theme = theme === 'dark' ? 'light' : 'dark'; applyTheme(theme); renderTopbar(); } });
+  return list;
+}
+const toolsMenu = (e) => { const cmds = commands(); menu(e.currentTarget, [{ label: 'コマンドパレット…', hint: 'Ctrl+K', onClick: () => openPalette(commands()) }, { sep: true }, ...cmds.filter((c) => !/切り替え|画面へ移動|^保存|やり直し|元に戻す/.test(L(c.label))).map((c) => ({ label: L(c.label), hint: c.hint, onClick: c.run }))]); };
+
 const toolBtns = () => [
+  h('button', { class: 'icon-btn', title: 'Search (Ctrl+Shift+F)', disabled: !store.project || ui.view === 'start', onclick: () => openSearch() }, '🔎'),
+  h('button', { class: 'icon-btn', title: 'Tools / Command palette (Ctrl+K)', onclick: toolsMenu }, '🧰'),
   h('button', { class: 'icon-btn', title: 'Plugins', onclick: () => openPlugins(() => { mount(); }) }, '🧩'),
   h('button', { class: 'icon-btn', title: 'Keyboard Shortcuts', onclick: () => openShortcuts() }, '⌨'),
 ];
@@ -202,6 +242,8 @@ async function settings() {
 document.addEventListener('keydown', (e) => {
   if (matchAction(e, 'save')) { e.preventDefault(); if (store.project) { saveNow(); toast('✓ 保存しました'); } return; }
   if (matchAction(e, 'run')) { e.preventDefault(); if (store.project) nav.run(); return; }
+  if (matchAction(e, 'palette')) { e.preventDefault(); openPalette(commands()); return; }
+  if (matchAction(e, 'globalsearch')) { e.preventDefault(); if (store.project && ui.view !== 'start') openSearch(); return; }
   if (matchAction(e, 'search')) {
     const s = document.querySelector('[data-search]');
     if (s) { e.preventDefault(); s.focus(); s.select(); }
@@ -218,8 +260,25 @@ document.addEventListener('keydown', (e) => {
   if (handled) e.preventDefault();
 });
 
+// drop a file anywhere: project (.json) / process data / generator definition / snippets are recognised by their content
+addEventListener('dragover', (e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); });
+addEventListener('drop', async (e) => {
+  const file = e.dataTransfer?.files?.[0];
+  if (!file || !/\.json$/i.test(file.name)) return;
+  e.preventDefault();
+  try {
+    const text = await file.text(), d = JSON.parse(text);
+    if (d.format === 'codiram-process') { if (store.project && ui.view !== 'start') { const { openProcessImport } = await import('./views/process.js'); await openProcessImport(text); } else toast('先にプロジェクトを開いてください'); }
+    else if (d.format === 'codiram-generator') { const { importIntoLibrary } = await import('./sdk/library.js'); const r = importIntoLibrary([text]); toast(`Generator「${r.id}」を ${r.action} しました`); renderTopbar(); }
+    else if (d.format === 'codiram-snippets') { const { importSnippets } = await import('./snippets.js'); toast(`${importSnippets(text)} 件のテンプレを読み込みました`); }
+    else if (d.pages && d.models) { const { importProject } = await import('./store.js'); importProject(text); nav.go('design'); toast('プロジェクトを読み込みました'); }
+    else toast('Codiram のファイルとして認識できませんでした');
+  } catch (err) { toast('読み込めません: ' + err.message); }
+});
+
 addEventListener('beforeunload', () => { if (store.project) saveNow(); });
 
 loadUserGenerators().forEach((f) => console.warn('Generator not loaded:', f.id, f.error));
 loadInstalledPlugins().finally(() => { mount(); renderTopbar(); });
+ui.settingsHook = settings;
 window.__codiram = { store, ui, nav, emit };

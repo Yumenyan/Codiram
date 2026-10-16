@@ -6,6 +6,7 @@ import { defineGenerator, buildSemanticModel } from '../../sdk/index.js';
 import { J } from '../../i18n-helpers.js';
 import { cm, noteFor } from '../../comments.js';
 import { projectFile } from '../../sdk/emit.js';
+import { emptyProject, newScript, newBlock } from '../../model.js';
 
 /** text of a string-only expression (literals and joins of literals) or null */
 const literal = (e) => (e.k === 'str' ? e.v : e.k === 'num' ? String(e.v) : e.k === 'call' && e.fn === 'concat' && e.args.every((a) => literal(a) !== null) ? e.args.map(literal).join('') : null);
@@ -119,5 +120,6 @@ defineGenerator({
   desc: J('NASM の 512 バイトブートセクタ(+ Makefile / QEMU / Linux カーネルのビルドスクリプト)', 'NASM 512-byte boot sector (+ Makefile / QEMU / Linux kernel build script)'),
   version: '0.1.0', language: ['asm'], platforms: ['x86', 'qemu'], supports: ['io', 'entry', 'cli'], views: ['logic', 'output'],
   defaultConfig: () => ({ type: 'os-bootloader' }), generate,
+  sample() { const p = emptyProject('Boot sample'); const s = newScript(p, 'main', 'cli_main', {}); s.body.push(newBlock('cli_print', { value: '"Hello"', nl: '1' })); p.scripts.push(s); return p; },
   verify: { requiredFiles: ['boot.asm', 'Makefile', 'build-linux-kernel.sh', 'README.md'], contains: { 'boot.asm': ['0xAA55', 'org 0x7C00'] }, build: { tool: 'nasm', args: ['-f', 'bin', 'boot.asm', '-o', 'boot.img'] } },
 });

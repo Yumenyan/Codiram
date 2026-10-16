@@ -124,3 +124,23 @@ validator's tables by `node scripts/export-definitions.mjs`; a test keeps it in 
 * **Scaffold ZIP** = `generator.definition.json` + `scaffold/…` + `js/targets/<id>/` loader (+ `custom.js`). Importing the ZIP in the Builder restores the definition and any edits made to `scaffold/` files.
 * **Code extension (only when data cannot say it):** `defineDeclarativeGenerator(spec, { statements: { 'my.op': (stmt, ctx) => lines }, files(files, ctx) {} })` — the `custom` scaffold creates `custom.js` for this. Everything else stays in the definition.
 * **Workflow for AI:** give the AI the schema + one reference definition, ask for a Definition JSON of the new target, Import it in the Builder, check the preview, adjust, Save / Scaffold. See [AI_GENERATOR_GUIDE.md](AI_GENERATOR_GUIDE.md).
+
+## Built-in generators (all verified by `tests/golden.test.mjs`)
+
+| Generator | Kind | Output |
+|---|---|---|
+| `web` / `static-web` / `html-css` / `vite-web` | code / project | HTML+CSS+JS; static hosting files; design only (no JS); Vite project |
+| `desktop` | code | Tauri 1.x project around the web app (file dialogs, clipboard, notifications) |
+| `rust-cli` | code | Cargo project (std only) |
+| `python` / `nodejs` / `javascript` / `typescript` | syntax (Definition) | CLI scripts; TypeScript has typed variables + tsconfig |
+| `godot` | syntax (Definition) | Godot 4 project, logic in `_ready()` |
+| `vscode-extension` | syntax (Definition) | VS Code extension, output as notifications |
+| `discord-bot` | syntax (Definition) | discord.js bot (command hat + reply block) |
+| `sql` / `sqlite` | data | CREATE TABLE / INSERT for SQLite, PostgreSQL, MySQL; `create_db.py` |
+| `data-pipeline` | data | JSON + CSV + JSON Schema + a validate/transform runner (Python) |
+| `rest-api` / `node-server` | data | CRUD API for every data model (+ OpenAPI, self test); the server also serves the web app |
+| `os-bootloader` | code | NASM 512-byte boot sector + Makefile (QEMU) + Linux kernel build script |
+| `minecraft` | code | paused |
+
+Add-ons (Export dialog): **GitHub Actions** workflow for any generator that has a sensible one (Pages deploy, CI, Tauri matrix).
+Generator Library (`sdk/library.js`, 🧰 Tools → Generator Library): list, validate, export / import / update, duplicate, AI Export.

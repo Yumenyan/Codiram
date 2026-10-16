@@ -7,6 +7,8 @@ export const ACTIONS = [
   { id: 'redo', label: J('やり直し', 'Redo'), def: ['Ctrl+Y', 'Ctrl+Shift+Z'] },
   { id: 'run', label: J('実行 (Preview)', 'Run (Preview)'), def: ['F5'] },
   { id: 'search', label: J('検索欄へ移動', 'Focus search'), def: ['Ctrl+F'] },
+  { id: 'globalsearch', label: J('プロジェクト全体を検索', 'Search the whole project'), def: ['Ctrl+Shift+F'] },
+  { id: 'palette', label: J('コマンドパレット', 'Command palette'), def: ['Ctrl+K', 'Ctrl+Shift+P'] },
   { id: 'copy', label: J('コピー', 'Copy'), def: ['Ctrl+C'] },
   { id: 'paste', label: J('貼り付け', 'Paste'), def: ['Ctrl+V'] },
   { id: 'duplicate', label: J('複製', 'Duplicate'), def: ['Ctrl+D'] },

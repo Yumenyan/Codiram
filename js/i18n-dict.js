@@ -205,3 +205,25 @@ alias('この定義でサンプルプログラムを生成できます', 'This d
 alias('保存して登録', 'Save and register');
 alias('閉じる', 'Close');
 alias('空のプロジェクト', 'Empty project');
+// Tools: search / palette / snippets / process data / generator library / monitor
+[
+  ['コマンドパレット…', 'Command palette…'], ['{0} 画面へ移動', 'Go to {0}'], ['実行 / プレビュー', 'Run / Preview'], ['保存', 'Save'], ['元に戻す', 'Undo'], ['やり直し', 'Redo'],
+  ['Export(書き出し)', 'Export'], ['プロジェクト全体を検索', 'Search the whole project'], ['Snippets(実装テンプレ)を開く', 'Open snippets (implementation templates)'],
+  ['処理データを読み込む(AI の JSON)', 'Import process data (JSON from an AI)'], ['処理データを書き出す(読みやすい JSON)', 'Export process data (readable JSON)'],
+  ['プロジェクト設定', 'Project settings'], ['プロジェクトファイル(.json)を書き出し', 'Export project file (.json)'], ['ターゲットを {0} に切り替え', 'Switch target to {0}'],
+  ['新しいプロジェクト', 'New project'], ['プロジェクト一覧', 'Projects'], ['Generator Library(Generator の一覧・管理)', 'Generator Library (list, import, export, validate)'],
+  ['Generator Builder(Generator を作る)', 'Generator Builder (create a generator)'], ['AI Export(AI 向け参考資料 ZIP)', 'AI Export (reference ZIP for AI)'], ['AI パックを書き出しました', 'AI pack exported'],
+  ['プラグイン', 'Plugins'], ['キーボードショートカット', 'Keyboard shortcuts'], ['言語を切り替え(日本語 / English)', 'Switch language (日本語 / English)'], ['ライト / ダークを切り替え', 'Toggle light / dark'],
+  ['プロジェクト全体を検索(部品・ブロック・変数・データ・設定)/ Search the whole project', 'Search the whole project (components, blocks, variables, data, settings)'],
+  ['文字を入力すると、部品・スクリプト・ブロックの中身・変数・データ・設定をまとめて探します。', 'Type to search components, scripts, block contents, variables, data and settings at once.'], ['見つかりません', 'Nothing found'],
+  ['コマンドを入力 / Type a command…', 'Type a command…'], ['📋 Snippets(実装テンプレ)', '📋 Snippets (implementation templates)'],
+  ['よく使う処理のテンプレ / 自作テンプレの登録', 'Common processing templates / register your own'], ['検索 / Filter', 'Filter'], ['＋ 選択中のブロックを登録', '＋ Save selected blocks'],
+  ['Logic でブロックを選んでから開いてください(Ctrl+クリックで複数選択)', 'Select blocks in Logic first (Ctrl+click for several)'], ['テンプレに登録', 'Save as snippet'], ['名前', 'Name'], ['テンプレに登録しました', 'Snippet saved'],
+  ['自作のテンプレがありません', 'You have no snippets of your own'], ['必要な変数(なければ自動作成): ', 'Variables needed (created if missing): '], ['↳ いまのスクリプトに追加', '↳ Add to the current script'],
+  ['🗑 削除', '🗑 Delete'], ['該当なし', 'No match'], ['テンプレを削除', 'Delete snippet'], ['先に Logic でスクリプトを作成・選択してください', 'Create or select a script in Logic first'],
+  ['⬆ 処理データを読み込む(AI が書いた JSON など)', '⬆ Import process data (JSON written by an AI, …)'], ['同じ名前のスクリプトは置き換える', 'Replace scripts with the same name'], ['書き方の例', 'Format example'],
+  ['ファイルを選ぶ', 'Choose file'], ['読み込む', 'Import'], ['エラーを直してください', 'Fix the errors first'], ['⬇ 処理データを書き出す(読みやすい JSON)', '⬇ Export process data (readable JSON)'],
+  ['コピー', 'Copy'], ['⬇ ファイルに保存', '⬇ Save to file'], ['変数モニター / Variables', 'Variable monitor'], ['⏸ 一時停止', '⏸ Pause'], ['▶ 再開', '▶ Resume'], ['クリア', 'Clear'],
+  ['(変数がありません / 実行すると表示されます)', '(no variables / shown while the app runs)'], ['📚 Generator Library', '📚 Generator Library'], ['生成コードのコメントの言語', 'Language of comments in generated code'],
+  ['自動(表示言語に合わせる)', 'Auto (follow the UI language)'], ['閉じる', 'Close'], ['削除しました', 'Deleted'], ['読み込めません: ', 'Cannot import: '],
+].forEach(([ja, en]) => alias(ja, en));
