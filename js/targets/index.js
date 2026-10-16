@@ -3,4 +3,5 @@ import './web.js';
 import './desktop/index.js';
 import './rust/index.js';
 import './python.js';
+import './vite.js';
 import './minecraft/index.js'; // paused (hidden from the target list); kept for existing Minecraft projects

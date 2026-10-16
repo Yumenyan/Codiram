@@ -102,3 +102,25 @@ filling the rules — **a new text-language generator needs no code** (Python CL
 Limits (by design): text languages with statement/expression syntax like the presets. Targets with unusual structure
 (static typing like Rust, project formats like Tauri) keep a code generator built from the same SDK pieces; the
 `custom` scaffold is the starting point.
+
+## Generator Definition (schema v2) — the Import / Export format
+
+Spec: [`docs/schemas/generator-definition.schema.json`](schemas/generator-definition.schema.json) (JSON Schema, generated from the
+validator's tables by `node scripts/export-definitions.mjs`; a test keeps it in sync). Reference definitions to copy:
+[`docs/definitions/`](definitions/) — `python.json` (syntax), `nodejs-cli.json` (syntax), `vite-web.json` (project), `split/` (the Python definition in parts).
+
+| Section | Holds |
+|---|---|
+| `format`, `schemaVersion: 2`, `kind` | `syntax` = program source from rules · `project` = multi-file project: `scaffold` files + optionally another generator's output (`scaffold.source = { generator, dir, exclude }`, e.g. Web → `src/`) |
+| `generator`, `target`, `capabilities` | metadata (id, names, version), language / platforms, supported capabilities |
+| `types`, `expressions`, `statements`, `io`, `conditions`, `loops`, `functions`, `events`, `syntax` | the language rules (templates with `{slots}`) — see the schema for every key |
+| `mappings` | `imports` / `helpers` keyed by what the program uses |
+| `templates` | `program` (main file with `{{imports}} {{helpers}} {{globals}} {{functions}} {{main}}`) and `files` (the scaffold: path → text with `{{name}} {{slug}} {{version}}`) |
+| `scaffold` | config defaults, config fields, `source` of a project generator |
+| `verify` | required files, patterns, JSON files, build / run command (used by the golden test) |
+
+* **Old format:** v1 specs (flat `rules` / `program`) still import; Export always writes v2. Unknown keys are warnings, so newer files still load.
+* **Split / extend:** one full definition + any number of *fragments* (`"fragment": true`, same `generator.id`, any sections) — `rust-core.json`, `rust-io.json` … — can be imported together or one after another; arrays union, objects merge, scalars override. `"extends": "<id>"` starts from an installed declarative generator (duplicate → change the target-specific parts).
+* **Scaffold ZIP** = `generator.definition.json` + `scaffold/…` + `js/targets/<id>/` loader (+ `custom.js`). Importing the ZIP in the Builder restores the definition and any edits made to `scaffold/` files.
+* **Code extension (only when data cannot say it):** `defineDeclarativeGenerator(spec, { statements: { 'my.op': (stmt, ctx) => lines }, files(files, ctx) {} })` — the `custom` scaffold creates `custom.js` for this. Everything else stays in the definition.
+* **Workflow for AI:** give the AI the schema + one reference definition, ask for a Definition JSON of the new target, Import it in the Builder, check the preview, adjust, Save / Scaffold. See [AI_GENERATOR_GUIDE.md](AI_GENERATOR_GUIDE.md).

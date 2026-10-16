@@ -1,0 +1,18 @@
+{
+  "format": "codiram-generator",
+  "schemaVersion": 2,
+  "fragment": true,
+  "generator": {
+    "id": "python"
+  },
+  "comment": "python-types",
+  "types": {
+    "true": "True",
+    "false": "False",
+    "null": "None",
+    "toStr": "str({a})",
+    "toStrNum": "fmt_num({a})",
+    "toNum": "to_num({a})",
+    "toBool": "bool({a})"
+  }
+}

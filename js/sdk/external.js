@@ -3,7 +3,8 @@
 // shipped inside a plugin:  export default { id, name, generators: [ spec, ... ] }.
 // A spec contains no code, so installing one cannot run anything on your machine.
 import { GeneratorRegistry } from '../registry.js';
-import { defineDeclarativeGenerator, validateSpec, SPEC_FORMAT } from './declarative.js';
+import { defineDeclarativeGenerator, validateSpec } from './declarative.js';
+import { importDefinitions, toDefinition } from './definition.js';
 
 const KEY = 'codiram.generators';
 /** replaceable storage (tests run without a browser) */
@@ -41,9 +42,11 @@ export function loadUserGenerators() {
   return failed;
 }
 
-export const exportSpec = (spec) => JSON.stringify(spec, null, 2) + '\n';
-export function parseSpecFile(text) {
-  const spec = JSON.parse(text);
-  if (spec.format !== SPEC_FORMAT) throw new Error(`not a Codiram generator file (format must be "${SPEC_FORMAT}")`);
-  return spec;
-}
+/** definition of an installed declarative generator (for `extends` and for duplicating one as a starting point) */
+export const definitionOf = (id) => GeneratorRegistry.get(id)?.spec || null;
+
+/** Export = Definition JSON (schema v2) */
+export const exportSpec = (spec) => JSON.stringify(toDefinition(spec), null, 2) + '\n';
+/** Import one or several definition files (full definition + fragments, v1 or v2) -> internal spec */
+export const importSpecTexts = (texts) => importDefinitions(texts, definitionOf);
+export const parseSpecFile = (text) => importSpecTexts([text]);

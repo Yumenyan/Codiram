@@ -11,6 +11,7 @@
 // The engine walks the Common Semantic Model (IR) and fills the rule templates, so the next generator costs a spec.
 import { defineGenerator, defineProjectTemplate, renderProjectTemplate, buildSemanticModel, irType, emit } from './index.js';
 import { CAPABILITIES } from './capabilities.js';
+import { normalizeDefinition } from './definition.js';
 import { GeneratorRegistry, hooks } from '../registry.js';
 import { targetConfig } from '../model.js';
 import { J } from '../i18n-helpers.js';
@@ -31,20 +32,27 @@ export function validateSpec(spec) {
   if (!spec.name?.ja && !spec.name?.en) errs.push('name is empty');
   if (!/^\d+\.\d+\.\d+/.test(spec.version || '')) errs.push('version must look like 1.0.0');
   for (const c of spec.supports || []) if (!CAPABILITIES[c]) errs.push(`unknown capability: ${c}`);
-  const rules = spec.rules || {};
-  for (const k of RULES_REQUIRED) if (!rules[k]) errs.push(`rules.${k} is required`);
-  if (!spec.program?.file) errs.push('program.file is required');
-  for (const s of PROGRAM_SLOTS) if (!(spec.program?.template || '').includes(`{{${s}}}`)) errs.push(`program.template must contain {{${s}}}`);
-  for (const cap of spec.supports || []) for (const k of CAP_RULES[cap] || []) if (!rules[k]) errs.push(`capability "${cap}" needs rules.${k}`);
-  const files = { ...(spec.files || {}), [spec.program?.file || '']: spec.program?.template || '' };
-  if (!(spec.verify?.requiredFiles || []).every((f) => f in files || f === 'codiram.project.json')) errs.push('verify.requiredFiles lists a file the template does not create');
+  const files = { ...(spec.files || {}) };
+  if (spec.source) {
+    // project generator wrapping another generator's output (Tauri / Vite style): no language rules needed
+    if (!GeneratorRegistry.get(spec.source.generator)) errs.push(`scaffold.source.generator "${spec.source.generator}" is not a registered generator`);
+    else if (GeneratorRegistry.get(spec.source.generator).engine !== 'blocks') errs.push('scaffold.source.generator must be a block-based generator (e.g. web)');
+  } else {
+    const rules = spec.rules || {};
+    for (const k of RULES_REQUIRED) if (!rules[k]) errs.push(`rules.${k} is required`);
+    if (!spec.program?.file) errs.push('templates.program.file is required');
+    for (const s of PROGRAM_SLOTS) if (!(spec.program?.template || '').includes(`{{${s}}}`)) errs.push(`templates.program.template must contain {{${s}}}`);
+    for (const cap of spec.supports || []) for (const k of CAP_RULES[cap] || []) if (!rules[k]) errs.push(`capability "${cap}" needs rules.${k}`);
+    files[spec.program?.file || ''] = spec.program?.template || '';
+  }
+  if (!(spec.verify?.requiredFiles || []).every((f) => f in files || f === 'codiram.project.json' || (spec.source && f.startsWith((spec.source.dir ? spec.source.dir + '/' : ''))))) errs.push('verify.requiredFiles lists a file the template does not create');
   return errs;
 }
 
 const fill = (tpl, vars) => String(tpl).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 
 /** IR -> { program source pieces, problems } following spec.rules */
-export function emitProgram(ir, spec, project) {
+export function emitProgram(ir, spec, project, hooks = {}) {
   const R = spec.rules, problems = [], uses = new Set();
   const unit = R.indent ?? '    ';
   const bracy = (R.close ?? '') !== '';
@@ -138,7 +146,11 @@ export function emitProgram(ir, spec, project) {
         if (need(rule, rule)) { uses.add(rule); push(fill(R[rule], { path: str(s.path), text: str(s.text) })); }
         break;
       }
-      default: problems.push({ msg: `unsupported statement: ${s.op}` });
+      default: {
+        const custom = hooks.statements?.[s.op]; // code extension point: ops no rule can express
+        if (custom) push(...[].concat(custom(s, { x, str, num, bool, fill, q, R })));
+        else problems.push({ msg: `unsupported statement: ${s.op}` });
+      }
     }
   }
   const block = (open, body, params = '') => {
@@ -161,7 +173,7 @@ export function emitProgram(ir, spec, project) {
   if (!handlers.length) problems.push({ msg: '「プログラムが開始されたとき」のスクリプトがありません(何も実行されません)', level: 'info' });
 
   const globalLines = ir.variables.filter((v) => globals.has(v.name)).map((v) => fill(R.globalDecl, {
-    name: globals.get(v.name),
+    name: globals.get(v.name), type: R.varTypes?.[v.type] || '',
     value: v.type === 'Number' ? String(Number(v.initial) || 0) : v.type === 'Boolean' ? (String(v.initial) === 'true' ? (R.true || 'true') : (R.false || 'false')) : q(v.initial ?? ''),
   }));
   const usedKeys = [...uses];
@@ -174,50 +186,71 @@ export function emitProgram(ir, spec, project) {
 }
 
 /** Spec -> { files, problems, ... } for a project whose generator (spec.id) is registered. */
-function generateFromSpec(spec, project, cfg) {
+function generateFromSpec(spec, project, cfg, code = {}) {
   const tplId = 'decl:' + spec.id;
   const cfgDefaults = { ...(spec.config || {}) };
   cfg = cfg || targetConfig(project, spec.id) || { type: spec.id, ...cfgDefaults };
-  const ir = buildSemanticModel(project, spec.id);
-  const { pieces, problems } = emitProgram(ir, spec, project);
-  const files = renderProjectTemplate(tplId, { ...cfgDefaults, ...cfg, name: project.name, slug: emit.slug(project.name, '_') || 'app', ...pieces });
-  files[spec.program.file] = files[spec.program.file].replace(/\n{3,}/g, '\n\n'); // empty {{imports}} / {{helpers}} slots leave gaps
+  const vars = { ...cfgDefaults, ...cfg, name: project.name, slug: emit.slug(project.name, '_') || 'app' };
+  let files, problems = [], entry, ir;
+  if (spec.source) {
+    // project generator: scaffold files + another generator's output placed in source.dir
+    const src = GeneratorRegistry.get(spec.source.generator).generate(project, null);
+    const dir = spec.source.dir ? spec.source.dir.replace(/\/?$/, '/') : '';
+    files = renderProjectTemplate(tplId, vars);
+    for (const [n, c] of Object.entries(src.files)) if (!(spec.source.exclude || []).includes(n)) files[dir + n] = c;
+    problems = src.problems || [];
+    entry = src.entry ? dir + src.entry : null;
+  } else {
+    ir = buildSemanticModel(project, spec.id);
+    const out = emitProgram(ir, spec, project, code);
+    files = renderProjectTemplate(tplId, { ...vars, ...out.pieces });
+    files[spec.program.file] = files[spec.program.file].replace(/\n{3,}/g, '\n\n'); // empty {{imports}} / {{helpers}} slots leave gaps
+    problems = [...ir.problems.filter((p) => !p.unsupported), ...out.problems];
+    entry = spec.program.file;
+  }
   files['codiram.project.json'] = emit.projectFile(project);
-  return { files, problems: [...ir.problems.filter((p) => !p.unsupported), ...problems], root: emit.slug(project.name, '-') || 'app', entry: spec.program.file, ir };
+  if (code.files) code.files(files, { project, cfg: vars, spec }); // code extension point: post-process the whole project
+  return { files, problems, root: emit.slug(project.name, '-') || 'app', entry, ir };
 }
 
-/** Registers a generator described by a spec. Returns the generator. `spec.draft` = Builder preview (hidden). */
-export function defineDeclarativeGenerator(spec) {
+/**
+ * Registers a generator described by a spec (see definition.js for the JSON form). Returns the generator.
+ * `code` is the optional code extension: { statements: { 'my.op': (stmt, ctx) => line(s) }, files(files, ctx) }.
+ * `spec.draft` = Builder preview (hidden).
+ */
+export function defineDeclarativeGenerator(spec, code = {}) {
   const errs = validateSpec(spec);
   if (errs.length) throw new Error(`Generator spec "${spec?.id}": ${errs.join('; ')}`);
-  defineProjectTemplate('decl:' + spec.id, { ...(spec.files || {}), [spec.program.file]: spec.program.template }, spec.name.en || spec.id);
+  const parent = spec.source ? GeneratorRegistry.get(spec.source.generator) : null;
+  defineProjectTemplate('decl:' + spec.id, { ...(spec.files || {}), ...(spec.program ? { [spec.program.file]: spec.program.template } : {}) }, spec.name.en || spec.id);
   const cfgDefaults = { ...(spec.config || {}) };
   return defineGenerator({
-    id: spec.id, order: spec.order ?? 5, portable: true, external: !spec.builtin && !spec.draft, hidden: !!spec.draft, spec,
+    id: spec.id, order: spec.order ?? 5, external: !spec.builtin && !spec.draft, hidden: !!spec.draft, spec, kind: spec.kind || 'syntax',
+    ...(parent ? { engine: 'blocks', inherits: parent.id } : { portable: true }),
     name: { ja: spec.name.ja || spec.name.en, en: spec.name.en || spec.name.ja },
     icon: spec.icon || '⚙', desc: spec.desc || J('', ''),
     version: spec.version, language: spec.language || [], platforms: spec.platforms || [], supports: spec.supports || [],
-    views: ['data', 'logic', 'output'],
+    views: parent ? parent.views : ['data', 'logic', 'output'],
     defaultConfig: () => ({ type: spec.id, ...cfgDefaults }),
     configFields: (spec.configFields || []).map((f) => ({ key: f.key, label: { ja: f.label, en: f.label }, ph: f.ph })),
-    generate: (project, cfg) => generateFromSpec(spec, project, cfg),
-    lint: (project) => buildSemanticModel(project, spec.id).problems.filter((p) => !p.unsupported).map((p) => ({ script: p.script, block: p.block, msg: p.msg })),
+    generate: (project, cfg) => generateFromSpec(spec, project, cfg, code),
+    lint: parent ? undefined : (project) => buildSemanticModel(project, spec.id).problems.filter((p) => !p.unsupported).map((p) => ({ script: p.script, block: p.block, msg: p.msg })),
     verify: spec.verify || {},
   });
 }
-hooks.defineDeclarativeGenerator = defineDeclarativeGenerator;
+hooks.defineDeclarativeGenerator = (def, code) => defineDeclarativeGenerator(def.schemaVersion ? normalizeDefinition(def) : def, code);
 
 /** Generate a sample project with a spec without keeping the generator registered (Generator Builder preview). */
-export function previewSpec(spec, project) {
+export function previewSpec(spec, project, code = {}) {
   const errors = validateSpec(spec);
   if (errors.length) return { errors };
   const draft = { ...spec, id: 'preview-draft', draft: true };
   try {
-    defineDeclarativeGenerator(draft);
+    defineDeclarativeGenerator(draft, code);
     const p = JSON.parse(JSON.stringify(project));
     p.targets = [{ type: 'preview-draft', ...(spec.config || {}) }]; p.activeTarget = 'preview-draft';
-    const res = generateFromSpec(draft, p);
-    const v = GeneratorRegistry.get('preview-draft').validate(p).problems;
+    const res = generateFromSpec(draft, p, null, code);
+    const v = spec.source ? [] : GeneratorRegistry.get('preview-draft').validate(p).problems; // the console sample is not meant for a Web-based project generator
     return { errors: [], files: res.files, entry: res.entry, problems: [...v, ...res.problems] };
   } finally { GeneratorRegistry.unregister('preview-draft'); }
 }

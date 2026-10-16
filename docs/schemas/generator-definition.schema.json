@@ -1,0 +1,493 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Codiram Generator Definition",
+  "type": "object",
+  "required": [
+    "format",
+    "schemaVersion",
+    "generator"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "comment": {
+      "type": "string"
+    },
+    "format": {
+      "const": "codiram-generator"
+    },
+    "schemaVersion": {
+      "const": 2
+    },
+    "kind": {
+      "enum": [
+        "syntax",
+        "project"
+      ],
+      "description": "syntax: program source from rules. project: multi-file project (scaffold + optional source generator)"
+    },
+    "extends": {
+      "type": "string",
+      "description": "id of an installed declarative generator to start from"
+    },
+    "fragment": {
+      "type": "boolean",
+      "description": "a part merged into the definition with the same generator.id"
+    },
+    "generator": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,30}$"
+        },
+        "name": {
+          "type": "object",
+          "properties": {
+            "ja": {
+              "type": "string"
+            },
+            "en": {
+              "type": "string"
+            }
+          }
+        },
+        "icon": {
+          "type": "string"
+        },
+        "desc": {
+          "type": "object",
+          "properties": {
+            "ja": {
+              "type": "string"
+            },
+            "en": {
+              "type": "string"
+            }
+          }
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "ui",
+          "events",
+          "variables",
+          "conditions",
+          "loops",
+          "functions",
+          "arrays",
+          "objects",
+          "data",
+          "localstorage",
+          "canvas",
+          "audio",
+          "game",
+          "animation",
+          "http",
+          "websocket",
+          "cli",
+          "io",
+          "filesystem",
+          "clipboard",
+          "notification",
+          "window",
+          "dialog",
+          "minecraft"
+        ]
+      }
+    },
+    "types": {
+      "type": "object",
+      "properties": {
+        "true": {
+          "type": "string",
+          "description": "types.true"
+        },
+        "false": {
+          "type": "string",
+          "description": "types.false"
+        },
+        "null": {
+          "type": "string",
+          "description": "types.null"
+        },
+        "toStr": {
+          "type": "string",
+          "description": "types.toStr"
+        },
+        "toStrNum": {
+          "type": "string",
+          "description": "types.toStrNum"
+        },
+        "toNum": {
+          "type": "string",
+          "description": "types.toNum"
+        },
+        "toBool": {
+          "type": "string",
+          "description": "types.toBool"
+        },
+        "varTypes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "expressions": {
+      "type": "object",
+      "properties": {
+        "not": {
+          "type": "string",
+          "description": "expressions.not"
+        },
+        "neg": {
+          "type": "string",
+          "description": "expressions.neg"
+        },
+        "concat": {
+          "type": "string",
+          "description": "expressions.concat"
+        },
+        "ops": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "calls": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "globalRef": {
+          "type": "string",
+          "description": "expressions.globalRef"
+        },
+        "localRef": {
+          "type": "string",
+          "description": "expressions.localRef"
+        }
+      },
+      "additionalProperties": false
+    },
+    "statements": {
+      "type": "object",
+      "properties": {
+        "comment": {
+          "type": "string",
+          "description": "statements.comment"
+        },
+        "globalDecl": {
+          "type": "string",
+          "description": "statements.globalDecl"
+        },
+        "set": {
+          "type": "string",
+          "description": "statements.set"
+        },
+        "log": {
+          "type": "string",
+          "description": "statements.log"
+        },
+        "call": {
+          "type": "string",
+          "description": "statements.call"
+        },
+        "wait": {
+          "type": "string",
+          "description": "statements.wait"
+        },
+        "print": {
+          "type": "string",
+          "description": "statements.print"
+        },
+        "printInline": {
+          "type": "string",
+          "description": "statements.printInline"
+        },
+        "exit": {
+          "type": "string",
+          "description": "statements.exit"
+        }
+      },
+      "additionalProperties": false
+    },
+    "io": {
+      "type": "object",
+      "properties": {
+        "readLine": {
+          "type": "string",
+          "description": "io.readLine"
+        },
+        "arg": {
+          "type": "string",
+          "description": "io.arg"
+        },
+        "readFile": {
+          "type": "string",
+          "description": "io.readFile"
+        },
+        "fileExists": {
+          "type": "string",
+          "description": "io.fileExists"
+        },
+        "writeFile": {
+          "type": "string",
+          "description": "io.writeFile"
+        },
+        "appendFile": {
+          "type": "string",
+          "description": "io.appendFile"
+        }
+      },
+      "additionalProperties": false
+    },
+    "conditions": {
+      "type": "object",
+      "properties": {
+        "ifOpen": {
+          "type": "string",
+          "description": "conditions.ifOpen"
+        },
+        "elseOpen": {
+          "type": "string",
+          "description": "conditions.elseOpen"
+        }
+      },
+      "additionalProperties": false
+    },
+    "loops": {
+      "type": "object",
+      "properties": {
+        "repeatOpen": {
+          "type": "string",
+          "description": "loops.repeatOpen"
+        }
+      },
+      "additionalProperties": false
+    },
+    "functions": {
+      "type": "object",
+      "properties": {
+        "fnOpen": {
+          "type": "string",
+          "description": "functions.fnOpen"
+        },
+        "fnGlobals": {
+          "type": "string",
+          "description": "functions.fnGlobals"
+        }
+      },
+      "additionalProperties": false
+    },
+    "events": {
+      "type": "object",
+      "properties": {
+        "mainOpen": {
+          "type": "string",
+          "description": "events.mainOpen"
+        },
+        "mainClose": {
+          "type": "string",
+          "description": "events.mainClose"
+        }
+      },
+      "additionalProperties": false
+    },
+    "syntax": {
+      "type": "object",
+      "properties": {
+        "indent": {
+          "type": "string",
+          "description": "syntax.indent"
+        },
+        "close": {
+          "type": "string",
+          "description": "syntax.close"
+        },
+        "emptyBody": {
+          "type": "string",
+          "description": "syntax.emptyBody"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "mappings": {
+      "type": "object",
+      "properties": {
+        "imports": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "helpers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "templates": {
+      "type": "object",
+      "properties": {
+        "program": {
+          "type": "object",
+          "required": [
+            "file",
+            "template"
+          ],
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "template": {
+              "type": "string"
+            }
+          }
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scaffold": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "type": "object"
+        },
+        "configFields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "ph": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "generator"
+          ],
+          "properties": {
+            "generator": {
+              "type": "string"
+            },
+            "dir": {
+              "type": "string"
+            },
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "verify": {
+      "type": "object",
+      "properties": {
+        "requiredFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contains": {
+          "type": "object"
+        },
+        "json": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "build": {
+          "type": "object",
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "run": {
+          "type": "object",
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

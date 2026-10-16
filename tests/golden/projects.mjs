@@ -46,6 +46,6 @@ export function cliGolden(targetCfg = { type: 'rust-cli', crateName: 'golden_cli
 
 /** which generators each golden project is for */
 export const GOLDEN = [
-  { id: 'web-golden', generators: [['web', () => webGolden()], ['desktop', () => webGolden({ type: 'desktop', appName: 'Golden', identifier: 'com.example.golden', version: '1.0.0', width: 800, height: 600 })]] },
+  { id: 'web-golden', generators: [['web', () => webGolden()], ['vite-web', () => webGolden({ type: 'vite-web', version: '0.1.0' })], ['desktop', () => webGolden({ type: 'desktop', appName: 'Golden', identifier: 'com.example.golden', version: '1.0.0', width: 800, height: 600 })]] },
   { id: 'cli-golden', generators: [['rust-cli', () => cliGolden().project], ['python', () => cliGolden({ type: 'python', version: '0.1.0' }).project]], stdout: cliGolden().stdout },
 ];

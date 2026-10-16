@@ -1,0 +1,17 @@
+{
+  "format": "codiram-generator",
+  "schemaVersion": 2,
+  "fragment": true,
+  "generator": {
+    "id": "python"
+  },
+  "comment": "python-io",
+  "io": {
+    "readLine": "sys.stdin.readline().rstrip(\"\\r\\n\")",
+    "arg": "(sys.argv[int({a})] if len(sys.argv) > int({a}) else \"\")",
+    "readFile": "read_file({a})",
+    "fileExists": "os.path.exists({a})",
+    "writeFile": "open({path}, \"w\", encoding=\"utf-8\").write({text})",
+    "appendFile": "open({path}, \"a\", encoding=\"utf-8\").write({text})"
+  }
+}

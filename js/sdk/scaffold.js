@@ -1,63 +1,78 @@
-// Scaffold generator: turns a generator spec into the files of a new generator inside the Codiram source tree.
-//   kind 'declarative': index.js is one call (the spec stays data)
-//   kind 'custom'     : index.js uses the SDK pieces directly (template, mapping, emitter hook) so code can replace the rules
+// Scaffold: the formal asset of a project generator. A scaffold ZIP holds
+//   generator.definition.json        the Definition (schema v2) — importable again in the Generator Builder
+//   scaffold/<path>                  the project skeleton (templates.files with {{placeholders}}): edit as plain files
+//   js/targets/<id>/index.js         loader that registers the generator with the SDK (+ custom.js for code extensions)
+//   js/targets/<id>/README.md        what to do next
+//   Definition + scaffold/ + SDK  ->  Generated Project
 import { json } from './emit.js';
+import { toDefinition, importDefinitions } from './definition.js';
+import { readZip } from '../zip.js';
 
 const js = (v) => JSON.stringify(v, null, 2);
+const DEF = 'generator.definition.json';
 
 export function scaffoldGenerator(spec, kind = 'declarative') {
   const id = spec.id, dir = `js/targets/${id}`;
   const files = {};
-  files[`${dir}/generator.spec.json`] = json(spec);
+  const definition = toDefinition(spec);
+  files[DEF] = json(definition);
+  for (const [path, text] of Object.entries(spec.files || {})) files[`scaffold/${path}`] = text;
+  files[`${dir}/generator.definition.json`] = json(definition);
   if (kind === 'declarative') {
-    files[`${dir}/index.js`] = `// ${spec.name.en || id}: a declarative generator (data only). Edit generator.spec.json (or the object below) to change it.
+    files[`${dir}/index.js`] = `// ${spec.name.en || id}: generated from generator.definition.json (data). Edit the JSON (or re-import it in the Generator Builder).
 import { defineDeclarativeGenerator } from '../../sdk/declarative.js';
+import { normalizeDefinition } from '../../sdk/definition.js';
 
-defineDeclarativeGenerator(${js(spec)});
+defineDeclarativeGenerator(normalizeDefinition(${js(definition)}));
 `;
   } else {
-    const { rules, program, files: extra, ...meta } = spec;
-    files[`${dir}/index.js`] = `// ${spec.name.en || id}: generator built from SDK pieces. Replace \`emitProgram\` with your own emitter when the rules are not enough.
-import { defineGenerator, defineProjectTemplate, renderProjectTemplate, buildSemanticModel, emit } from '../../sdk/index.js';
-import { emitProgram } from '../../sdk/declarative.js';
-import { targetConfig } from '../../model.js';
+    files[`${dir}/index.js`] = `// ${spec.name.en || id}: definition (data) + custom code. Keep as much as possible in the definition; code only for what it cannot say.
+import { defineDeclarativeGenerator } from '../../sdk/declarative.js';
+import { normalizeDefinition } from '../../sdk/definition.js';
+import custom from './custom.js';
 
-const SPEC = ${js(spec)};
-
-// 1. project layout (see sdk/template.js)
-defineProjectTemplate('${id}-basic', { ...SPEC.files, [SPEC.program.file]: SPEC.program.template });
-
-// 2. project -> semantic model -> source (rules = mapping table, see sdk/mapping.js; TODO: custom emitter for what rules cannot say)
-function generate(project, cfg) {
-  const ir = buildSemanticModel(project, '${id}');
-  const { pieces, problems } = emitProgram(ir, SPEC, project);
-  const files = renderProjectTemplate('${id}-basic', { ...SPEC.config, ...cfg, name: project.name, slug: emit.slug(project.name, '_') || 'app', ...pieces });
-  files['codiram.project.json'] = emit.projectFile(project);
-  return { files, problems: [...ir.problems.filter((p) => !p.unsupported), ...problems], root: emit.slug(project.name, '-') || 'app', entry: SPEC.program.file };
-}
-
-defineGenerator({
-  id: SPEC.id, order: 5, portable: true,
-  name: SPEC.name, icon: SPEC.icon, desc: SPEC.desc,
-  version: SPEC.version, language: SPEC.language, platforms: SPEC.platforms, supports: SPEC.supports,
-  views: ['data', 'logic', 'output'],
-  defaultConfig: () => ({ type: SPEC.id, ...SPEC.config }),
-  configFields: SPEC.configFields.map((f) => ({ key: f.key, label: { ja: f.label, en: f.label } })),
-  generate,
-  verify: SPEC.verify,
-});
+defineDeclarativeGenerator(normalizeDefinition(${js(definition)}), custom);
 `;
-    void meta;
+    files[`${dir}/custom.js`] = `// Code extension points of a declarative generator (all optional).
+export default {
+  // IR statements no rule can express: 'my.op': (stmt, { x, str, num, bool, fill, q, R }) => 'line' | ['lines']
+  statements: {},
+  // post-process the generated project: files is { path: text }; add / change / remove entries
+  files(files, { project, cfg, spec }) {
+    void files; void project; void cfg; void spec;
+  },
+};
+`;
   }
   files[`${dir}/README.md`] = `# ${spec.name.en || id} generator (scaffold)
 
 Next steps
 1. Add \`import './${id}/index.js';\` to \`js/targets/index.js\`.
-2. Add it to a golden project in \`tests/golden/projects.mjs\` (for example the \`cli-golden\` entry:
-   \`['${id}', () => cliGolden().project]\`) and run \`npm test\` — every generator must have a golden project.
-3. Fill in what the rules cannot express (see docs/GENERATOR_SDK.md, "Add a generator").
+2. Add it to a golden project in \`tests/golden/projects.mjs\` and run \`npm test\` — every generator needs a golden project.
+3. To change the generator, edit \`generator.definition.json\` / \`scaffold/\` and import the ZIP (or the JSON) in the Generator Builder;
+   put code only in \`custom.js\` (see docs/GENERATOR_SDK.md).
 
-The same \`generator.spec.json\` can also be loaded in the Generator Builder (Import) or shipped in a plugin: \`export default { id, name, generators: [spec] }\`.
+Plugin form: \`export default { id, name, generators: [definition] }\` (data only).
 `;
   return files;
+}
+
+/**
+ * Read a scaffold ZIP: returns a Definition text list for importDefinitions(); files under scaffold/ override templates.files.
+ * Works with ZIPs made by scaffoldGenerator or any ZIP containing generator.definition.json (+ scaffold/).
+ */
+export async function readScaffoldZip(bytes, resolve) {
+  const all = await readZip(bytes), dec = new TextDecoder();
+  const defName = Object.keys(all).find((n) => n === DEF) || Object.keys(all).find((n) => n.endsWith('/' + DEF));
+  if (!defName) throw new Error(`${DEF} not found in the ZIP`);
+  const spec = importDefinitions([dec.decode(all[defName])], resolve);
+  const prefix = defName.slice(0, defName.length - DEF.length) + 'scaffold/';
+  spec.files = { ...spec.files };
+  for (const [n, data] of Object.entries(all)) {
+    if (!n.startsWith(prefix)) continue;
+    const text = dec.decode(data);
+    if (text.includes('�')) continue; // binary files are not part of a text scaffold
+    spec.files[n.slice(prefix.length)] = text;
+  }
+  return spec;
 }

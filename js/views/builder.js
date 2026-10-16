@@ -6,8 +6,9 @@ import { CAPABILITIES, capLabel } from '../sdk/capabilities.js';
 import { PRESETS, blankSpec } from '../sdk/presets.js';
 import { previewSpec } from '../sdk/declarative.js';
 import { sampleProject } from '../sdk/sample.js';
-import { installGeneratorSpec, uninstallGenerator, userGenerators, exportSpec, parseSpecFile } from '../sdk/external.js';
-import { scaffoldGenerator } from '../sdk/scaffold.js';
+import { installGeneratorSpec, uninstallGenerator, userGenerators, exportSpec, importSpecTexts, definitionOf } from '../sdk/external.js';
+import { scaffoldGenerator, readScaffoldZip } from '../sdk/scaffold.js';
+import { GeneratorRegistry } from '../registry.js';
 import { makeZip } from '../zip.js';
 import { L } from '../i18n.js';
 
@@ -28,7 +29,7 @@ const RULE_FIELDS = [
     ['readFile', '{a}'], ['fileExists', '{a}'], ['writeFile', '{path} {text}'], ['appendFile', '{path} {text}'],
   ]],
 ];
-const JSON_RULES = [['ops', 'operator renames, e.g. {"&&":"and"}'], ['calls', 'contains / isEmpty / pow / random / ternary → {a} {b} {c}'], ['imports', 'use → import line'], ['helpers', 'use → helper code']];
+const JSON_RULES = [['varTypes', 'Number / String / Boolean → type name, used as {type} in globalDecl'], ['ops', 'operator renames, e.g. {"&&":"and"}'], ['calls', 'contains / isEmpty / pow / random / ternary → {a} {b} {c}'], ['imports', 'use → import line'], ['helpers', 'use → helper code']];
 
 const field = (label, input, hint) => h('label', { class: 'bld-field' }, h('span', {}, label, hint ? h('small', { class: 'muted' }, ' ' + hint) : null), input);
 const txt = (get, set, mono = false, ph = '') => h('input', { class: 'inp' + (mono ? ' mono' : ''), value: get() ?? '', placeholder: ph, oninput: (e) => set(e.target.value) });
@@ -70,19 +71,26 @@ export async function openBuilder(start) {
         field('Name (English)', txt(() => spec.name.en, (v) => { spec.name.en = v; redraw(); })),
         field('アイコン / Icon', txt(() => spec.icon, (v) => { spec.icon = v; })),
         field('バージョン / Version', txt(() => spec.version, (v) => { spec.version = v; redraw(); })),
-        field('言語 / Languages', csv('language')), field('プラットフォーム / Platforms', csv('platforms'))),
+        field('言語 / Languages', csv('language')), field('プラットフォーム / Platforms', csv('platforms')),
+      field('種類 / Kind', h('select', { class: 'sel', onchange: (e) => { spec.kind = e.target.value; if (spec.kind === 'project' && !spec.source) { spec.source = { generator: 'web', dir: '', exclude: ['README.md'] }; spec.verify = { requiredFiles: ['index.html'] }; } if (spec.kind === 'syntax') { delete spec.source; const b = blankSpec(); spec.program = spec.program || b.program; if (!Object.keys(spec.rules || {}).length) spec.rules = b.rules; spec.supports = spec.supports?.length ? spec.supports : b.supports; spec.verify = { requiredFiles: [spec.program.file] }; } build(); } },
+        [['syntax', 'Syntax — 言語ルールからソースを生成'], ['project', 'Project — Scaffold + 他の Generator の出力']].map(([v, l]) => h('option', { value: v, selected: (spec.kind || (spec.source ? 'project' : 'syntax')) === v }, l)))),
+      ...(spec.source ? [
+        field('ソース Generator(出力を取り込む)', h('select', { class: 'sel', onchange: (e) => { spec.source.generator = e.target.value; redraw(); } },
+          GeneratorRegistry.list({ includeHidden: true }).filter((g) => g.engine === 'blocks').map((g) => h('option', { value: g.id, selected: g.id === spec.source.generator }, g.id)))),
+        field('配置先フォルダ(空 = ルート)', txt(() => spec.source.dir, (v) => { spec.source.dir = v; redraw(); }, true)),
+        field('除外ファイル(カンマ区切り)', csv('exclude', spec.source))] : [])),
       h('details', {}, h('summary', {}, '2. Capabilities(対応機能)'), caps),
-      ...RULE_FIELDS.map(([title, rows], i) => h('details', { open: i === 0 }, h('summary', {}, `${3 + i}. Rules — ${title}`),
-        rows.map(([k, hint]) => field(k, txt(() => spec.rules[k], (v) => { if (v === '') delete spec.rules[k]; else spec.rules[k] = v; redraw(); }, true), hint)))),
+      ...(spec.source ? [] : RULE_FIELDS.map(([title, rows], i) => h('details', { open: i === 0 }, h('summary', {}, `${3 + i}. Rules — ${title}`),
+        rows.map(([k, hint]) => field(k, txt(() => spec.rules[k], (v) => { if (v === '') delete spec.rules[k]; else spec.rules[k] = v; redraw(); }, true), hint))))),
       h('details', {}, h('summary', {}, '6. Rules — ops / calls / imports / helpers (JSON)'),
         JSON_RULES.map(([k, hint]) => field(k, area(() => JSON.stringify(spec.rules[k] || {}, null, 2), (v) => {
           try { spec.rules[k] = JSON.parse(v || '{}'); delete jsonErr[k]; } catch (e) { jsonErr[k] = e.message; }
           redraw();
         }, 4), hint))),
       h('details', {}, h('summary', {}, '7. プロジェクトテンプレート / Project template'),
-        field('メインファイル名 / Program file', txt(() => spec.program.file, (v) => { spec.program.file = v; redraw(); }, true)),
-        field('メインファイルの雛形(必須: {{functions}} {{main}} / 任意: {{imports}} {{helpers}} {{globals}} {{name}})', area(() => spec.program.template, (v) => { spec.program.template = v; redraw(); }, 8)),
-        field('その他のファイル(JSON: パス → 内容、{{name}} {{slug}} {{version}} が使えます)', area(() => JSON.stringify(spec.files || {}, null, 2), (v) => {
+      ...(spec.source ? [] : [field('メインファイル名 / Program file', txt(() => spec.program.file, (v) => { spec.program.file = v; redraw(); }, true)),
+      field('メインファイルの雛形(必須: {{functions}} {{main}} / 任意: {{imports}} {{helpers}} {{globals}} {{name}})', area(() => spec.program.template, (v) => { spec.program.template = v; redraw(); }, 8))]),
+        field('Scaffold ファイル(JSON: パス → 内容、{{name}} {{slug}} {{version}} が使えます。Import で ZIP からも取り込めます)', area(() => JSON.stringify(spec.files || {}, null, 2), (v) => {
           try { spec.files = JSON.parse(v || '{}'); delete jsonErr.files; } catch (e) { jsonErr.files = e.message; }
           redraw();
         }, 6))),
@@ -96,17 +104,25 @@ export async function openBuilder(start) {
   };
 
   const mine = userGenerators();
-  const startPick = h('select', { class: 'sel', onchange: async (e) => {
+  const bases = GeneratorRegistry.list({ includeHidden: true }).filter((g) => g.spec && g.id !== 'preview-draft');
+  const startPick = h('select', { class: 'sel', onchange: (e) => {
     const v = e.target.value;
     if (!v) return;
-    spec = v === 'blank' ? blankSpec() : clone(v.startsWith('my:') ? mine.find((s) => s.id === v.slice(3)) : PRESETS[v]);
-    if (v === 'python') { delete spec.builtin; spec.id = 'my-python'; spec.name = { ja: 'My Python', en: 'My Python' }; }
+    if (v === 'blank') spec = blankSpec();
+    else if (v === 'nodejs') spec = clone(PRESETS.nodejs);
+    else { spec = clone(definitionOf(v)); delete spec.builtin; spec.id = spec.id + '-copy'; spec.name = { ja: spec.name.ja + ' (copy)', en: spec.name.en + ' (copy)' }; } // duplicate a definition, change the target-specific parts
     cur = null; jsonErr = {}; build();
-  } }, h('option', { value: '' }, '— 雛形から始める / Start from —'), h('option', { value: 'python' }, 'Python CLI'), h('option', { value: 'nodejs' }, 'Node.js CLI'), h('option', { value: 'blank' }, 'Blank'),
-  mine.map((s) => h('option', { value: 'my:' + s.id }, '★ ' + (s.name.en || s.id))));
-  const importBtn = h('button', { class: 'btn small', onclick: () => {
-    const inp = h('input', { type: 'file', accept: '.json,application/json' });
-    inp.onchange = async () => { try { spec = parseSpecFile(await inp.files[0].text()); cur = null; build(); } catch (e) { toast('読み込めません: ' + e.message); } };
+  } }, h('option', { value: '' }, '— 雛形から始める(複製)/ Start from —'), h('option', { value: 'blank' }, 'Blank'), h('option', { value: 'nodejs' }, 'Node.js CLI (preset)'),
+  bases.map((g) => h('option', { value: g.id }, (g.external ? '★ ' : '') + g.id + (g.kind === 'project' ? ' (project)' : ''))));
+  const importBtn = h('button', { class: 'btn small', title: 'Definition JSON(複数可: core + parts)または Scaffold ZIP', onclick: () => {
+    const inp = h('input', { type: 'file', accept: '.json,.zip,application/json,application/zip', multiple: true });
+    inp.onchange = async () => {
+      try {
+        const files = [...inp.files], zip = files.find((f) => f.name.endsWith('.zip'));
+        spec = zip ? await readScaffoldZip(new Uint8Array(await zip.arrayBuffer()), definitionOf) : importSpecTexts(await Promise.all(files.map((f) => f.text())));
+        cur = null; jsonErr = {}; build(); toast(`${files.length} ファイルを読み込みました`);
+      } catch (e) { toast('読み込めません: ' + e.message); }
+    };
     inp.click();
   } }, '⬆ Import');
 

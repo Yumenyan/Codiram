@@ -13,7 +13,7 @@ import { TEMPLATES } from '../js/templates.js';
 import { emptyProject, newScript, newBlock } from '../js/model.js';
 
 // ---- registry
-assert.deepEqual(GeneratorRegistry.list().map((g) => g.id), ['web', 'desktop', 'rust-cli', 'python']);
+assert.deepEqual(GeneratorRegistry.list().map((g) => g.id), ['web', 'desktop', 'rust-cli', 'python', 'vite-web']);
 assert.ok(GeneratorRegistry.get('minecraft').hidden, 'minecraft is paused (hidden)');
 assert.ok(GeneratorRegistry.list({ includeHidden: true }).some((g) => g.id === 'minecraft'));
 assert.deepEqual(GeneratorRegistry.findByCapability('cli').map((g) => g.id), ['rust-cli', 'python']);
