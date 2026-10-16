@@ -23,12 +23,20 @@ export function registerPlugin(plugin) {
   plugin.install?.({ registerComponent, registerBlock, registerExporter });
 }
 
+// color + shape + icon + label are all used so categories never rely on colour alone.
 export const BLOCK_CATS = [
-  { id: 'Events', label: 'Events', ja: 'イベント', icon: '⚡', color: '#d97706', pattern: 'solid' },
-  { id: 'Variables', label: 'Variables', ja: '変数', icon: '𝑥', color: '#2563eb', pattern: 'dashed' },
-  { id: 'Conditions', label: 'Conditions', ja: '条件', icon: '？', color: '#7c3aed', pattern: 'double' },
-  { id: 'Control', label: 'Control', ja: '制御', icon: '↻', color: '#0d9488', pattern: 'dotted' },
-  { id: 'Data', label: 'Data', ja: 'データ', icon: '▦', color: '#be185d', pattern: 'groove' },
-  { id: 'UI', label: 'UI', ja: 'UI', icon: '▢', color: '#4d7c0f', pattern: 'ridge' },
+  { id: 'Events', label: 'Events', ja: 'イベント', icon: '⚡', color: '#d97706', shape: 'hex' },
+  { id: 'Variables', label: 'Variables', ja: '変数', icon: '𝑥', color: '#2563eb', shape: 'circle' },
+  { id: 'Conditions', label: 'Conditions', ja: '条件', icon: '？', color: '#7c3aed', shape: 'diamond' },
+  { id: 'Control', label: 'Control', ja: '制御', icon: '↻', color: '#0d9488', shape: 'square' },
+  { id: 'Math', label: 'Math', ja: '演算', icon: '∑', color: '#0284c7', shape: 'circle' },
+  { id: 'Text', label: 'Text', ja: '文字列', icon: 'Aa', color: '#c026d3', shape: 'pill' },
+  { id: 'List', label: 'List', ja: '配列', icon: '▤', color: '#4f46e5', shape: 'square' },
+  { id: 'Object', label: 'Object', ja: 'オブジェクト', icon: '{}', color: '#78716c', shape: 'pill' },
+  { id: 'Time', label: 'Time', ja: '日付・時刻', icon: '◷', color: '#92400e', shape: 'circle' },
+  { id: 'Data', label: 'Data', ja: 'データ', icon: '▦', color: '#be185d', shape: 'square' },
+  { id: 'UI', label: 'UI', ja: 'UI', icon: '▢', color: '#4d7c0f', shape: 'tri' },
+  { id: 'Animation', label: 'Animation', ja: 'アニメーション', icon: '✦', color: '#ea580c', shape: 'diamond' },
+  { id: 'System', label: 'System', ja: 'システム', icon: '⚙', color: '#334155', shape: 'hex' },
 ];
 export const catOf = (id) => BLOCK_CATS.find((c) => c.id === id) || BLOCK_CATS[0];

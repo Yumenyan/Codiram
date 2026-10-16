@@ -1,1 +1,11 @@
-{"type":"module"}
+{
+  "name": "codiram",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "GUI-based web app development environment (no build step)",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "test": "node tests/all-blocks.test.mjs"
+  }
+}

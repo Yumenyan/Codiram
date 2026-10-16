@@ -1,4 +1,5 @@
-// Small shared helpers (no dependencies).
+// Small shared helpers.
+import { t, L, isBi } from './i18n.js';
 
 export const uid = (p = 'n') =>
   p + Math.random().toString(36).slice(2, 7) + Date.now().toString(36).slice(-2);
@@ -20,11 +21,11 @@ export function h(tag, attrs, ...kids) {
     else if (k === 'html') e.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
     else if (PROP_KEYS.has(k)) e[k] = v;
-    else e.setAttribute(k, v === true ? '' : v);
+    else e.setAttribute(k, v === true ? '' : (k === 'title' || k === 'placeholder' || k === 'aria-label') ? L(v) : v);
   }
   for (const c of kids.flat(Infinity)) {
     if (c == null || c === false) continue;
-    e.append(c.nodeType ? c : document.createTextNode(c));
+    e.append(c.nodeType ? c : document.createTextNode(isBi(c) ? L(c) : typeof c === 'string' ? t(c) : c));
   }
   return e;
 }

@@ -3,6 +3,7 @@ import { h, fmtDate } from '../util.js';
 import { listProjects, openProject, newProject, deleteProject, duplicateProject, importProject, nav } from '../store.js';
 import { TEMPLATES } from '../templates.js';
 import { confirmDlg, dialog, toast } from '../ui-kit.js';
+import { tf } from '../i18n.js';
 
 export function renderStart(root) {
   root.className = 'view start';
@@ -18,7 +19,7 @@ export function renderStart(root) {
         h('b', {}, p.name), h('span', { class: 'muted small' }, fmtDate(p.updated)),
         h('span', { class: 'card-actions' },
           h('button', { class: 'mini', title: '複製', onclick: (e) => { e.stopPropagation(); duplicateProject(p.id); renderStart(root); } }, '⧉'),
-          h('button', { class: 'mini', title: '削除', onclick: async (e) => { e.stopPropagation(); if (await confirmDlg('プロジェクトを削除', `「${p.name}」を完全に削除します。`, '削除')) { deleteProject(p.id); renderStart(root); } } }, '🗑'))))),
+          h('button', { class: 'mini', title: '削除', onclick: async (e) => { e.stopPropagation(); if (await confirmDlg('プロジェクトを削除', tf('「{0}」を完全に削除します。', p.name), '削除')) { deleteProject(p.id); renderStart(root); } } }, '🗑'))))),
     h('div', { class: 'row-gap' }, h('button', { class: 'btn', onclick: importFile }, '⬆ プロジェクトファイル(.json)を読み込む'))));
 }
 

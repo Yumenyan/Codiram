@@ -4,6 +4,7 @@ import { blocks } from '../registry.js';
 import { store, ui, commit } from '../store.js';
 import { FIELD_TYPES, VAR_TYPES, newModel, nextRowId, defaultFor, walkBlocks, allNodes } from '../model.js';
 import { dialog, confirmDlg, toast } from '../ui-kit.js';
+import { tf } from '../i18n.js';
 
 const proj = () => store.project;
 let root;
@@ -20,7 +21,7 @@ export function renderData(container, origin) {
     h('div', { class: 'panel-title' }, 'Models'),
     h('div', { class: 'scroll' },
       p.models.map((m) => h('div', { class: 'layer' + (ui.selModel === m.id ? ' on' : ''), onclick: () => { ui.selModel = m.id; renderData(root); } },
-        h('span', { class: 'pal-ico' }, '▦'), h('span', {}, m.name), h('em', {}, m.rows.length + ' rows'))),
+        h('span', { class: 'pal-ico' }, '▦'), h('span', {}, m.name), h('em', {}, tf('{0} rows', m.rows.length)))),
       h('button', { class: 'btn small wide', onclick: addModel }, '＋ New Model'),
       h('div', { class: 'panel-title' }, 'Variables'),
       h('div', { class: 'layer' + (ui.selModel === '__vars' ? ' on' : ''), onclick: () => { ui.selModel = '__vars'; renderData(root); } },
@@ -79,7 +80,7 @@ function modelEditor(m) {
   return h('div', {},
     h('div', { class: 'row-between' }, nameInp,
       h('button', { class: 'btn small danger', onclick: async () => {
-        if (!(await confirmDlg('モデルを削除', `「${m.name}」とそのデータを削除します(Undoで戻せます)。`, '削除'))) return;
+        if (!(await confirmDlg('モデルを削除', tf('「{0}」とそのデータを削除します(Undoで戻せます)。', m.name), '削除'))) return;
         commit('Delete model', (p) => { p.models = p.models.filter((x) => x.id !== m.id); }); renderData(root);
       } }, 'Delete model')),
     h('h4', {}, 'Schema'), fields, addField,

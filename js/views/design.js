@@ -6,6 +6,10 @@ import { store, ui, commit, nav, getLibrary, setLibrary } from '../store.js';
 import { findNode, createNode, freshClone, isContainer, newPage, uniqueName, newScript, walk, allNodes } from '../model.js';
 import { promptText, menu, toast, confirmDlg } from '../ui-kit.js';
 import { BASE_CSS } from '../components.js';
+import { fontSelect } from './fontpicker.js';
+import { fontStack, googleFontsUrl } from '../fonts.js';
+import { keyframesCss, animationDecl } from '../animations.js';
+import { L, tf, t } from '../i18n.js';
 
 let root, els = {}, search = '', device = 'full';
 const proj = () => store.project;
@@ -28,7 +32,7 @@ export function renderDesign(container, origin) {
 }
 
 function build() {
-  if (!document.getElementById('cx-base-css')) document.head.append(h('style', { id: 'cx-base-css' }, BASE_CSS));
+  if (!document.getElementById('cx-base-css')) document.head.append(h('style', { id: 'cx-base-css' }, BASE_CSS + '\n' + keyframesCss()));
   els.toolbar = h('div', { class: 'toolbar' });
   els.stageWrap = h('div', { class: 'stage-wrap' });
   els.left = h('aside', { class: 'panel left' });
@@ -95,7 +99,7 @@ function pageMenu(anchor) {
   menu(anchor, [
     { label: 'ページ名を変更…', onClick: async () => { const n = await promptText('ページ名', pg.name); if (n) commit('Rename page', (p) => { p.pages.find((x) => x.id === pg.id).name = n; }); } },
     { label: 'ページを削除', disabled: proj().pages.length < 2, onClick: async () => {
-      if (!(await confirmDlg('ページを削除', `「${pg.name}」とそのロジックを削除します(Undoで戻せます)。`, '削除'))) return;
+      if (!(await confirmDlg('ページを削除', tf('「{0}」とそのロジックを削除します(Undoで戻せます)。', pg.name), '削除'))) return;
       commit('Delete page', (p) => { p.pages = p.pages.filter((x) => x.id !== pg.id); p.scripts = p.scripts.filter((s) => s.page !== pg.id); });
       ui.pageId = proj().pages[0].id; renderDesign(root);
     } },
@@ -124,7 +128,7 @@ function fillPalette() {
     const soon = COMING_SOON.filter((d) => d.cat === cat && match(d.label));
     if (!items.length && !soon.length) continue;
     els.palette.append(catSection(cat, [
-      ...items.map((d) => h('div', { class: 'pal-item', draggable: 'true', title: `${d.label} — クリックで追加 / ドラッグで配置`,
+      ...items.map((d) => h('div', { class: 'pal-item', draggable: 'true', title: tf('{0} — クリックで追加 / ドラッグで配置', t(d.label)),
         onclick: () => addComponent(d.type), ondragstart: (e) => { e.dataTransfer.setData('application/x-codiram-new', d.type); e.dataTransfer.effectAllowed = 'copy'; } },
         h('span', { class: 'pal-ico' }, d.icon), h('span', {}, d.label))),
       ...soon.map((d) => h('div', { class: 'pal-item disabled', title: 'プラグインで追加予定' }, h('span', { class: 'pal-ico' }, d.icon), h('span', {}, d.label), h('em', {}, 'soon'))),
@@ -152,7 +156,7 @@ function catSection(name, kids) {
 function layerTree(node, depth) {
   const def = components.get(node.type);
   const row = h('div', { class: 'layer' + (ui.selNode === node.id ? ' on' : ''), style: { paddingLeft: 8 + depth * 14 + 'px' }, onclick: () => select(node.id) },
-    h('span', { class: 'pal-ico' }, def?.icon || '?'), h('span', {}, node.type === 'page' ? 'Page: ' + page().name : node.name), h('em', {}, node.type));
+    h('span', { class: 'pal-ico' }, def?.icon || '?'), h('span', {}, node.type === 'page' ? tf('Page: {0}', page().name) : node.name), h('em', {}, node.type));
   return h('div', {}, row, (node.children || []).map((c) => layerTree(c, depth + 1)));
 }
 
@@ -170,7 +174,20 @@ function renderStage() {
   const ctx = { project: proj(), editor: true };
   els.surface.innerHTML = renderNode(page().root, ctx);
   els.surface.style.maxWidth = device === 'full' ? '' : device + 'px';
+  syncFonts();
   markSelection();
+}
+
+function syncFonts() {
+  const p = proj();
+  const vals = [p.settings?.font, ...allNodes(p).map((x) => x.node.style?.fontFamily)].filter(Boolean);
+  const url = googleFontsUrl(vals);
+  let link = document.getElementById('cx-fonts');
+  if (url && !link) { link = h('link', { id: 'cx-fonts', rel: 'stylesheet' }); document.head.append(link); }
+  if (link && link.getAttribute('href') !== url) { if (url) link.setAttribute('href', url); else link.remove(); }
+  els.surface.style.fontFamily = fontStack(p.settings?.font);
+  // fonts may load late and change sizes
+  document.fonts?.ready.then(() => placeOverlay());
 }
 
 function markSelection() {
@@ -345,7 +362,7 @@ export function deleteSel() {
   commit('Delete ' + name, (p) => { const x = findNode(p, id); x.parent.children.splice(x.index, 1); });
   ui.selNode = null;
   renderDesign(root);
-  toast(`「${name}」を削除しました`, { label: '元に戻す', fn: () => nav.undo() });
+  toast(tf('「{0}」を削除しました', name), { label: '元に戻す', fn: () => nav.undo() });
 }
 
 export function duplicateSel() {
@@ -392,7 +409,7 @@ async function saveToLibrary() {
   if (!name) return;
   setLibrary([...getLibrary(), { id: 'l' + Date.now().toString(36), name, node: clone(f.node) }]);
   ui.leftTab = 'components'; renderLeft();
-  toast(`★ 「${name}」を保存しました`);
+  toast(tf('★ 「{0}」を保存しました', name));
 }
 
 // ---------------------------------------------------------------- properties
@@ -402,11 +419,11 @@ function renderProps() {
   const f = ui.selNode && findNode(proj(), ui.selNode);
   if (!f) { R.append(h('div', { class: 'muted pad' }, 'キャンバスで部品を選択すると、ここに設定が表示されます。')); return; }
   const node = f.node, def = components.get(node.type);
-  R.append(h('div', { class: 'props-head' }, h('span', { class: 'pal-ico' }, def.icon), h('b', {}, node.type === 'page' ? 'Page: ' + page().name : def.label), h('em', {}, node.type)));
+  R.append(h('div', { class: 'props-head' }, h('span', { class: 'pal-ico' }, def.icon), h('b', {}, node.type === 'page' ? tf('Page: {0}', page().name) : def.label), h('em', {}, node.type)));
   const groups = {};
   propSchema(node).forEach((pr) => (groups[pr.g] = groups[pr.g] || []).push(pr));
   const events = def.events || [];
-  const order = ['General', 'Data', ...(events.length ? ['Action'] : []), 'Layout', 'Style'];
+  const order = ['General', 'Data', ...(events.length ? ['Action'] : []), 'Layout', 'Style', 'Animation'];
   const body = h('div', { class: 'scroll' });
   for (const g of order) {
     if (!groups[g] && g !== 'Action') continue;
@@ -445,7 +462,9 @@ function propRow(node, pr) {
     case 'textarea': input = h('textarea', { class: 'inp', rows: 3, placeholder: pr.ph || '', 'data-prop': pr.k, oninput: (e) => set(e.target.value, live) }); input.value = val ?? ''; break;
     case 'bool': input = h('input', { type: 'checkbox', checked: !!val, 'data-prop': pr.k, onchange: (e) => set(e.target.checked) }); break;
     case 'select': input = h('select', { class: 'sel', 'data-prop': pr.k, onchange: (e) => set(e.target.value) },
-      pr.opts.map((o) => h('option', { value: o, selected: (val ?? '') === o }, o === '' ? '(default)' : o))); break;
+      pr.opts.map((o) => { const [ov, ol] = Array.isArray(o) ? o : [o, o === '' ? '(default)' : o]; return h('option', { value: ov, selected: String(val ?? '') === ov }, ol); })); break;
+    case 'font': input = fontSelect(val, (v) => set(v), { 'data-prop': pr.k }); break;
+    case 'playanim': input = h('button', { class: 'btn small', onclick: () => playOnCanvas(node) }, '▶ Play'); break;
     case 'model': input = h('select', { class: 'sel', 'data-prop': pr.k, onchange: (e) => set(e.target.value) },
       h('option', { value: '' }, '(なし)'), proj().models.map((m) => h('option', { value: m.name, selected: val === m.name }, m.name))); break;
     case 'var': input = h('select', { class: 'sel', 'data-prop': pr.k, onchange: async (e) => {
@@ -464,6 +483,17 @@ function propRow(node, pr) {
     default: input = h('input', { class: 'inp', value: val ?? '', placeholder: pr.ph || '', 'data-prop': pr.k, oninput: (e) => set(e.target.value, live) });
   }
   return h('div', { class: 'prow' + (pr.t === 'bool' ? ' inline' : '') }, h('label', {}, pr.label), input);
+}
+
+function playOnCanvas(node) {
+  const el = els.surface.querySelector(`[data-nid="${node.id}"]`);
+  const decl = animationDecl(node.props);
+  if (!el || !decl) { toast(L({ ja: '登場アニメーションまたは繰り返しアニメーションを選んでください', en: 'Choose an entrance or looping animation first' })); return; }
+  el.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = decl;
+  if (!node.props.animLoop) el.addEventListener('animationend', () => { el.style.animation = ''; }, { once: true });
+  else setTimeout(() => { el.style.animation = ''; }, 3200);
 }
 
 const toHex = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#000000');

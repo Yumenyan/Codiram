@@ -1,6 +1,9 @@
 // UI component definitions + HTML/CSS rendering shared by the Design canvas and the generated app.
 import { registerComponent, components } from './registry.js';
 import { esc } from './util.js';
+import { fontStack, BUILTIN_FONTS, GOOGLE_FONTS } from './fonts.js';
+import { ANIMS, HOVERS, EASINGS } from './animations.js';
+import { J } from './i18n-helpers.js';
 
 export const BASE_CSS = `/* Base styles for Codiram components */
 *, *::before, *::after { box-sizing: border-box; }
@@ -46,7 +49,9 @@ export function cssDecls(node) {
   if (s.color) add('color', s.color);
   if (s.background) add('background', s.background);
   if (s.fontSize) add('font-size', px(s.fontSize));
-  if (s.bold) add('font-weight', '700');
+  if (s.fontFamily) add('font-family', fontStack(s.fontFamily));
+  if (s.fontWeight) add('font-weight', s.fontWeight);
+  else if (s.bold) add('font-weight', '700');
   if (s.radius !== undefined && s.radius !== '') add('border-radius', px(s.radius));
   if (Number(s.border) > 0) add('border', `${px(s.border)} solid ${s.borderColor || 'currentColor'}`);
   if (s.textAlign) add('text-align', s.textAlign);
@@ -61,12 +66,19 @@ const splitList = (s) => String(s || '').split(/[\n,]/).map((x) => x.trim()).fil
 const bindAttr = (n) => (n.props.bind ? ` data-bind="${esc(n.props.bind)}"` : '');
 const ro = (c) => (c.editor ? ' readonly tabindex="-1"' : '');
 
-const EVENT_CLICK = [{ key: 'click', label: 'On Click', hat: 'onClick' }];
-const EVENT_CHANGE = [{ key: 'change', label: 'On Change', hat: 'onChange' }];
+const EVENT_CLICK = [
+  { key: 'click', label: 'On Click', hat: 'onClick' },
+  { key: 'dblclick', label: 'On Double Click', hat: 'onDblClick' },
+  { key: 'hover', label: 'On Hover', hat: 'onHover' },
+];
+const EVENT_CHANGE = [
+  { key: 'change', label: 'On Change', hat: 'onChange' },
+  { key: 'enter', label: 'On Enter key', hat: 'onEnter' },
+];
 const bindProp = { k: 'bind', label: 'Bind to variable', t: 'var', g: 'Data' };
 
 const container = (cls, label, icon, extra = {}) => ({
-  type: extra.type, label, cat: 'Layout', icon, container: true,
+  type: extra.type, label, cat: 'Layout', icon, container: true, events: EVENT_CLICK,
   defaults: { props: {}, style: { gap: '8', ...(extra.style || {}) } },
   props: [],
   render: (n, c, kids) => `<div${c.attrs(n, 'cx cx-' + cls)}>${kids}</div>`,
@@ -74,7 +86,7 @@ const container = (cls, label, icon, extra = {}) => ({
 
 const defs = [
   {
-    type: 'text', label: 'Text', cat: 'Basic', icon: 'T',
+    type: 'text', label: 'Text', cat: 'Basic', icon: 'T', events: EVENT_CLICK,
     defaults: { props: { text: 'Text' }, style: {} },
     props: [{ k: 'text', label: 'Text', t: 'textarea', g: 'General', ph: '{変数名} で変数の値を表示' }],
     render: (n, c) => `<div${c.attrs(n, 'cx cx-text', `data-text="${esc(n.props.text)}"`)}>${esc(n.props.text)}</div>`,
@@ -127,22 +139,23 @@ const defs = [
   },
   {
     type: 'table', label: 'Table', cat: 'Data', icon: '▦',
-    defaults: { props: { source: '', cols: '', deleteBtn: false }, style: {} },
+    defaults: { props: { source: '', cols: '', deleteBtn: false, deleteLabel: '削除' }, style: {} },
     props: [
       { k: 'source', label: 'Data source (model)', t: 'model', g: 'Data' },
       { k: 'cols', label: 'Columns (空=全て)', t: 'text', g: 'Data', ph: 'name, email' },
       { k: 'deleteBtn', label: '行の削除ボタン', t: 'bool', g: 'Data' },
+      { k: 'deleteLabel', label: '削除ボタンの文字', t: 'text', g: 'Data' },
     ],
     render: (n, c) => {
       const m = sel(c.project, n.props.source);
-      const attrs = `data-source="${esc(n.props.source)}" data-cols="${esc(n.props.cols)}"${n.props.deleteBtn ? ' data-delete' : ''}`;
+      const attrs = `data-source="${esc(n.props.source)}" data-cols="${esc(n.props.cols)}"${n.props.deleteBtn ? ` data-delete="${esc(n.props.deleteLabel || '削除')}"` : ''}`;
       let inner = '';
       if (c.editor) {
         if (!m) inner = '<tbody><tr><td>データモデルを選択してください</td></tr></tbody>';
         else {
           const cols = splitList(n.props.cols).length ? splitList(n.props.cols) : m.fields.map((f) => f.name);
           inner = `<thead><tr>${cols.map((x) => `<th>${esc(x)}</th>`).join('')}${n.props.deleteBtn ? '<th></th>' : ''}</tr></thead><tbody>` +
-            m.rows.slice(0, 8).map((r) => `<tr>${cols.map((x) => `<td>${esc(r[x] ?? '')}</td>`).join('')}${n.props.deleteBtn ? '<td>削除</td>' : ''}</tr>`).join('') + '</tbody>';
+            m.rows.slice(0, 8).map((r) => `<tr>${cols.map((x) => `<td>${esc(r[x] ?? '')}</td>`).join('')}${n.props.deleteBtn ? `<td>${esc(n.props.deleteLabel || '削除')}</td>` : ''}</tr>`).join('') + '</tbody>';
         }
       }
       return `<table${c.attrs(n, 'cx cx-table', attrs)}>${inner}</table>`;
@@ -170,13 +183,13 @@ const defs = [
     },
   },
   {
-    type: 'image', label: 'Image', cat: 'Media', icon: '🖼',
+    type: 'image', label: 'Image', cat: 'Media', icon: '🖼', events: EVENT_CLICK,
     defaults: { props: { src: '', alt: '' }, style: { width: '160' } },
     props: [{ k: 'src', label: 'Image URL', t: 'text', g: 'General', ph: 'https://... / assets/photo.png' }, { k: 'alt', label: 'Alt text', t: 'text', g: 'General' }],
     render: (n, c) => `<img${c.attrs(n, 'cx cx-image', `src="${esc(n.props.src || PLACEHOLDER_IMG)}" alt="${esc(n.props.alt)}"`)}>`,
   },
   {
-    type: 'icon', label: 'Icon', cat: 'Media', icon: '★',
+    type: 'icon', label: 'Icon', cat: 'Media', icon: '★', events: EVENT_CLICK,
     defaults: { props: { icon: '⭐' }, style: {} },
     props: [{ k: 'icon', label: 'Icon', t: 'select', g: 'General', opts: ['⭐', '❤️', '✅', '❌', '⚠️', '🔍', '⚙️', '🏠', '📅', '📍', '🚃', '📊', '✉️', '🔔', '➕', '🗑️'] }],
     render: (n, c) => `<span${c.attrs(n, 'cx cx-icon')}>${esc(n.props.icon)}</span>`,
@@ -221,24 +234,36 @@ export function propSchema(node) {
   if (node.type !== 'page') out.push({ k: 'grow', label: '余白を埋める (flex:1)', t: 'bool', g: 'Layout', s: true });
   if (isC) {
     out.push(
-      { k: 'direction', label: 'Direction', t: 'select', g: 'Layout', s: true, opts: ['', 'column', 'row'] },
+      { k: 'direction', label: 'Direction', t: 'select', g: 'Layout', s: true, opts: ['', ['column', J('縦並び', 'Vertical')], ['row', J('横並び', 'Horizontal')]] },
       { k: 'gap', label: 'Gap', t: 'text', g: 'Layout', s: true },
-      { k: 'align', label: 'Align items', t: 'select', g: 'Layout', s: true, opts: ['', 'flex-start', 'center', 'flex-end', 'stretch'] },
-      { k: 'justify', label: 'Justify', t: 'select', g: 'Layout', s: true, opts: ['', 'flex-start', 'center', 'flex-end', 'space-between'] },
+      { k: 'align', label: 'Align items', t: 'select', g: 'Layout', s: true, opts: ['', ['flex-start', J('開始側', 'Start')], ['center', J('中央', 'Center')], ['flex-end', J('終了側', 'End')], ['stretch', J('引き伸ばし', 'Stretch')]] },
+      { k: 'justify', label: 'Justify', t: 'select', g: 'Layout', s: true, opts: ['', ['flex-start', J('開始側', 'Start')], ['center', J('中央', 'Center')], ['flex-end', J('終了側', 'End')], ['space-between', J('両端揃え', 'Space between')]] },
       { k: 'wrap', label: 'Wrap', t: 'bool', g: 'Layout', s: true },
     );
   }
   out.push(
     { k: 'color', label: 'Text color', t: 'color', g: 'Style', s: true },
     { k: 'background', label: 'Background', t: 'color', g: 'Style', s: true },
+    { k: 'fontFamily', label: 'Font', t: 'font', g: 'Style', s: true },
     { k: 'fontSize', label: 'Font size', t: 'text', g: 'Style', s: true, ph: '16' },
+    { k: 'fontWeight', label: 'Font weight', t: 'select', g: 'Style', s: true, opts: ['', ['300', J('細字 (300)', 'Light (300)')], ['400', J('標準 (400)', 'Regular (400)')], ['500', J('中太 (500)', 'Medium (500)')], ['700', J('太字 (700)', 'Bold (700)')], ['900', J('極太 (900)', 'Black (900)')]] },
     { k: 'bold', label: 'Bold', t: 'bool', g: 'Style', s: true },
-    { k: 'textAlign', label: 'Text align', t: 'select', g: 'Style', s: true, opts: ['', 'left', 'center', 'right'] },
+    { k: 'textAlign', label: 'Text align', t: 'select', g: 'Style', s: true, opts: ['', ['left', J('左', 'Left')], ['center', J('中央', 'Center')], ['right', J('右', 'Right')]] },
     { k: 'radius', label: 'Border radius', t: 'text', g: 'Style', s: true, ph: '6' },
     { k: 'border', label: 'Border width', t: 'text', g: 'Style', s: true },
     { k: 'borderColor', label: 'Border color', t: 'color', g: 'Style', s: true },
   );
-  return out.filter((p) => !p.hide);
+  const animOpts = (kind) => ['', ...Object.entries(ANIMS).filter(([, a]) => a.kind === kind).map(([k, a]) => [k, J(a.ja, a.en)])];
+  out.push(
+    { k: 'anim', label: 'Entrance animation', t: 'select', g: 'Animation', opts: animOpts('in') },
+    { k: 'animDur', label: 'Duration (ms)', t: 'text', g: 'Animation', ph: '600' },
+    { k: 'animDelay', label: 'Delay (ms)', t: 'text', g: 'Animation', ph: '0' },
+    { k: 'animEase', label: 'Easing', t: 'select', g: 'Animation', opts: EASINGS.map((e) => [e, e]) },
+    { k: 'animLoop', label: 'Looping animation', t: 'select', g: 'Animation', opts: animOpts('loop') },
+    { k: 'hover', label: 'Hover effect', t: 'select', g: 'Animation', opts: ['', ...Object.entries(HOVERS).map(([k, a]) => [k, J(a.ja, a.en)])] },
+    { k: '__play', label: 'Preview', t: 'playanim', g: 'Animation' },
+  );
+  return out.filter((p) => !p.hide && !(node.type === 'page' && p.g === 'Animation' && p.k !== 'anim' && p.k !== 'animDur'));
 }
 
 /**

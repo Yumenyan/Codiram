@@ -2,6 +2,7 @@
 // { pages:[{id,name,root:Node}], models:[{id,name,fields,rows}], variables:[], scripts:[] }
 import { uid, clone, sanitizeIdent } from './util.js';
 import { components, blocks } from './registry.js';
+import { tf, t as tt } from './i18n.js';
 
 export const FIELD_TYPES = ['String', 'Number', 'Boolean', 'Date', 'Array', 'Object'];
 export const VAR_TYPES = ['String', 'Number', 'Boolean'];
@@ -118,7 +119,9 @@ export function newScript(project, pageId, hatType, args) {
 export function scriptTitle(project, script) {
   if (script.name) return script.name;
   const def = blocks.get(script.hat.type);
-  return def?.summary ? def.summary(script.hat.args, project) : (def?.title || script.hat.type);
+  if (def?.summary) return def.summary(script.hat.args, project);
+  const tgt = script.hat.args.target && allNodes(project).find((x) => x.node.id === script.hat.args.target);
+  return tgt ? `${tgt.node.name} · ${tt(def.title)}` : (def?.title || script.hat.type);
 }
 
 /** Visit every block in a stack (depth-first). fn(block, arr, index, parentBlock) */
@@ -155,19 +158,19 @@ export function lint(project) {
   const fns = new Set(fnNames(project));
   const check = (b, script) => {
     const def = blocks.get(b.type);
-    if (!def) { problems.push({ script: script.id, block: b.id, msg: `不明なブロック: ${b.type}` }); return; }
+    if (!def) { problems.push({ script: script.id, block: b.id, msg: tf('不明なブロック: {0}', b.type) }); return; }
     for (const [k, f] of Object.entries(def.fields || {})) {
       const v = b.args[k];
       const bad = (m) => problems.push({ script: script.id, block: b.id, msg: m });
-      if (f.t === 'comp') { if (!v) bad('対象のUI部品が未選択です'); else if (!nodes.has(v)) bad('対象のUI部品が見つかりません(削除された可能性)'); }
-      if (f.t === 'model') { if (!v) bad('データモデルが未選択です'); else if (!models.has(v)) bad(`データモデル「${v}」が存在しません`); }
-      if (f.t === 'var') { if (!v) bad('変数が未選択です'); else if (!vars.has(v)) bad(`変数「${v}」が存在しません`); }
-      if (f.t === 'page' && v && !pages.has(v)) bad('移動先のページが見つかりません');
-      if (f.t === 'page' && !v && f.required) bad('ページが未選択です');
-      if (f.t === 'fn') { if (!v) bad('関数が未選択です'); else if (!fns.has(v)) bad(`関数「${v}」が定義されていません`); }
+      if (f.t === 'comp') { if (!v) bad(tt('対象のUI部品が未選択です')); else if (!nodes.has(v)) bad(tt('対象のUI部品が見つかりません(削除された可能性)')); }
+      if (f.t === 'model') { if (!v) bad(tt('データモデルが未選択です')); else if (!models.has(v)) bad(tf('データモデル「{0}」が存在しません', v)); }
+      if (f.t === 'var') { if (!v) { if (!f.opt) bad(tt('変数が未選択です')); } else if (!vars.has(v)) bad(tf('変数「{0}」が存在しません', v)); }
+      if (f.t === 'page' && v && !pages.has(v)) bad(tt('移動先のページが見つかりません'));
+      if (f.t === 'page' && !v && f.required) bad(tt('ページが未選択です'));
+      if (f.t === 'fn') { if (!v) bad(tt('関数が未選択です')); else if (!fns.has(v)) bad(tf('関数「{0}」が定義されていません', v)); }
       if (f.t === 'fieldname' && b.args.model) {
         const m = project.models.find((x) => x.name === b.args.model);
-        if (m && v && !m.fields.some((x) => x.name === v)) bad(`フィールド「${v}」が ${m.name} に存在しません`);
+        if (m && v && !m.fields.some((x) => x.name === v)) bad(tf('フィールド「{0}」が {1} に存在しません', v, m.name));
       }
     }
   };

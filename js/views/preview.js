@@ -1,6 +1,7 @@
 // Preview view: runs the generated app inside an iframe (separate from the editor).
 import { h } from '../util.js';
 import { store, ui, nav } from '../store.js';
+import { tf } from '../i18n.js';
 import { generate, bundleInline } from '../generator.js';
 import { findBlock } from '../model.js';
 import { resolveErrors, gotoBlock } from './logic.js';
@@ -50,7 +51,7 @@ function renderErrors() {
   errBox.textContent = '';
   if (!ui.errors.length) { errBox.style.display = 'none'; return; }
   errBox.style.display = 'block';
-  errBox.append(h('b', {}, `⚠ ${ui.errors.length} 件のエラー`));
+  errBox.append(h('b', {}, tf('⚠ {0} 件のエラー', ui.errors.length)));
   ui.errors.forEach((e) => {
     const s = e.block ? store.project.scripts.find((x) => x.id === e.script) : null;
     errBox.append(h('div', { class: 'errrow' }, h('span', {}, e.message),

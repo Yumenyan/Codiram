@@ -6,8 +6,12 @@ import { store, ui, commit, nav } from '../store.js';
 import { allNodes, newBlock, newScript, scriptTitle, findBlock, walkBlocks, freshBlockClone, fnNames, lint, findNode } from '../model.js';
 import { components } from '../registry.js';
 import { promptText, menu, toast, confirmDlg } from '../ui-kit.js';
+import { L, getLang, isBi, tf } from '../i18n.js';
+import { ANIMS } from '../animations.js';
 
 const proj = () => store.project;
+const catName = (c) => (getLang() === 'ja' ? c.ja : c.label);
+const blockTitle = (d) => (getLang() === 'en' && d.en ? d.en : d.title);
 let root, els = {}, search = '';
 const script = () => proj().scripts.find((s) => s.id === ui.selScript);
 
@@ -67,7 +71,7 @@ function renderLeft() {
   for (const pg of p.pages) {
     const key = 'sp:' + pg.id, closed = ui.collapsed.has(key);
     const ss = p.scripts.filter((s) => s.page === pg.id);
-    tree.append(h('button', { class: 'cat-head', onclick: () => { closed ? ui.collapsed.delete(key) : ui.collapsed.add(key); renderLeft(); } }, closed ? '▸ ' : '▾ ', `Page: ${pg.name}`, h('em', {}, ss.length)));
+    tree.append(h('button', { class: 'cat-head', onclick: () => { closed ? ui.collapsed.delete(key) : ui.collapsed.add(key); renderLeft(); } }, closed ? '▸ ' : '▾ ', tf('Page: {0}', pg.name), h('em', {}, ss.length)));
     if (!closed) ss.forEach((s) => {
       const n = probs.filter((x) => x.script === s.id).length;
       tree.append(h('div', { class: 'layer script-item' + (s.id === ui.selScript ? ' on' : ''), onclick: () => { ui.selScript = s.id; ui.selBlocks.clear(); renderLogic(root); } },
@@ -85,7 +89,7 @@ function renderLeft() {
 
 function newScriptMenu(anchor) {
   const hats = [...blocks.values()].filter((d) => d.kind === 'hat');
-  menu(anchor, hats.map((d) => ({ label: `${d.icon} ${d.title}`, onClick: () => createScript(d.type) })));
+  menu(anchor, hats.map((d) => ({ label: `${d.icon} ${blockTitle(d)}`, onClick: () => createScript(d.type) })));
 }
 
 function createScript(hatType) {
@@ -96,7 +100,7 @@ function createScript(hatType) {
   if (def.fields.target) {
     const sel = ui.selNode && findNode(p, ui.selNode)?.node;
     const ok = (n) => n.type !== 'page' && (!def.fields.target.types || def.fields.target.types.includes(n.type));
-    const want = (n) => (hatType === 'onClick' ? n.type === 'button' : (components.get(n.type)?.events || []).some((e) => e.hat === hatType));
+    const want = (n) => (components.get(n.type)?.events || []).some((e) => e.hat === hatType);
     args.target = (sel && ok(sel) && want(sel) ? sel : allNodes(p).map((x) => x.node).find(want))?.id || '';
   }
   if (def.fields.page) args.page = pageId;
@@ -173,6 +177,12 @@ function blockEl(ctx, b) {
   return blockShell(ctx, b.id, def, b, false, slots);
 }
 
+function partEl(ctx, id, def, part, b) {
+  if (isBi(part)) return L(part) === '' ? null : h('span', { class: 'b-txt' }, part);
+  if (typeof part === 'string') return h('span', { class: 'b-txt' }, part);
+  return fieldEl(ctx, id, def, part.f, b);
+}
+
 function blockShell(ctx, id, def, b, isHat, slots) {
   const cat = catOf(def.cat);
   const probs = ctx.probMap[id] || [];
@@ -184,8 +194,8 @@ function blockShell(ctx, id, def, b, isHat, slots) {
     ondragstart: (e) => { e.dataTransfer.setData('application/x-codiram-block', JSON.stringify({ kind: 'move', id })); e.dataTransfer.effectAllowed = 'move'; document.body.classList.add('dragging-blocks'); selectBlockOnly(id); },
     ondragend: () => document.body.classList.remove('dragging-blocks') },
     isHat ? null : h('span', { class: 'grip', title: 'ドラッグで移動' }, '⠿'),
-    h('span', { class: 'b-cat', title: cat.label + ' (' + cat.ja + ')' }, h('span', { class: 'b-ico' }, def.icon), h('span', { class: 'b-cat-name' }, cat.ja)),
-    h('span', { class: 'b-parts' }, def.parts.map((part) => (typeof part === 'string' ? h('span', { class: 'b-txt' }, part) : fieldEl(ctx, id, def, part.f, b)))),
+    h('span', { class: 'b-cat', title: catName(cat) }, h('span', { class: 'b-ico shape-' + cat.shape }, def.icon), h('span', { class: 'b-cat-name' }, catName(cat))),
+    h('span', { class: 'b-parts' }, def.parts.map((part) => partEl(ctx, id, def, part, b))),
     probs.length ? h('span', { class: 'b-warn' }, '⚠') : null,
     isHat ? null : h('span', { class: 'b-actions' },
       h('button', { class: 'mini', title: '複製 (Ctrl+D)', onclick: () => { selectBlockOnly(id); duplicateSel(); } }, '⧉'),
@@ -199,7 +209,7 @@ function blockShell(ctx, id, def, b, isHat, slots) {
 }
 
 function stackEl(ctx, arr, parentId, slot, depth) {
-  const st = h('div', { class: 'stack' + (arr.length ? '' : ' empty') });
+  const st = h('div', { class: 'stack' + (arr.length ? '' : ' is-empty') });
   const dz = (i) => h('div', { class: 'dz', 'data-parent': parentId, 'data-slot': slot, 'data-index': i,
     ondragover: (e) => { if ([...e.dataTransfer.types].includes('application/x-codiram-block')) { e.preventDefault(); e.currentTarget.classList.add('over'); } },
     ondragleave: (e) => e.currentTarget.classList.remove('over'),
@@ -258,7 +268,7 @@ function setArg(ctx, id, key, value, typing) {
 const sizeFor = (v, min = 3) => Math.max(min, Math.min(40, String(v ?? '').length + 1));
 
 function textInput(v, ph, onType, cls = 'f f-expr', list) {
-  const i = h('input', { class: cls, value: v ?? '', placeholder: ph || '', size: sizeFor(v, ph ? Math.max(4, Math.min(ph.length, 8)) : 3), spellcheck: 'false', list: list ? 'dl-names' : null });
+  const i = h('input', { class: cls, value: v ?? '', placeholder: ph || '', size: sizeFor(v, ph ? Math.max(5, Math.min(ph.length + 1, 10)) : 3), spellcheck: 'false', list: list ? 'dl-names' : null });
   i.addEventListener('input', () => { i.size = sizeFor(i.value); onType(i.value); });
   return i;
 }
@@ -288,19 +298,24 @@ function fieldEl(ctx, id, def, key, b) {
       return sel((m?.fields || []).map((x) => [x.name, x.name]), v, set, '(フィールド)');
     }
     case 'var': {
+      const vt = f.vt;
+      const list = p.variables.filter((x) => !vt || x.type === vt || x.name === v);
       const s = h('select', { class: 'f f-sel', onchange: async (e) => {
         if (e.target.value !== '__new') return set(e.target.value);
         const name = await promptText('新しい変数', '', '変数名');
         if (!name) { renderLogic(root); return; }
         const vn = sanitizeIdent(name);
         commit('Add variable', (pp) => {
-          if (!pp.variables.some((x) => x.name === vn)) pp.variables.push({ name: vn, type: 'Number', initial: '0' });
+          if (!pp.variables.some((x) => x.name === vn)) pp.variables.push({ name: vn, type: vt || 'Number', initial: vt === 'Array' ? '[]' : vt === 'Object' ? '{}' : '0' });
           const sc = pp.scripts.find((x) => x.id === ctx.s.id);
           (id.startsWith('hat:') ? sc.hat : findBlock(sc, id).block).args[key] = vn;
         });
-      } }, h('option', { value: '' }, '(変数)'), p.variables.map((x) => h('option', { value: x.name, selected: x.name === v }, x.name)), h('option', { value: '__new' }, '＋ 新規変数…'));
+      } }, h('option', { value: '' }, '(変数)'), list.map((x) => h('option', { value: x.name, selected: x.name === v }, x.name)), h('option', { value: '__new' }, '＋ 新規変数…'));
       return s;
     }
+    case 'anim': return h('select', { class: 'f f-sel', onchange: (e) => set(e.target.value) }, h('option', { value: '' }, '(選択)'),
+      ['in', 'loop', 'once'].map((k) => h('optgroup', { label: L({ in: { ja: '登場', en: 'Entrance' }, loop: { ja: '繰り返し', en: 'Looping' }, once: { ja: '単発・強調・退場', en: 'One-shot / exit' } }[k]) },
+        Object.entries(ANIMS).filter(([, a]) => a.kind === k).map(([n, a]) => h('option', { value: n, selected: n === v }, L({ ja: a.ja, en: a.en }))))));
     case 'cond': return condEl(ctx, id, key, v || defaultCond());
     case 'values': return valuesEl(ctx, id, key, b, v || {});
     default: return h('span', {}, String(v ?? ''));
@@ -368,7 +383,7 @@ export function deleteSel() {
   });
   ui.selBlocks.clear();
   renderLogic(root);
-  toast(`${ids.length} 個のブロックを削除しました`, { label: '元に戻す', fn: () => nav.undo() });
+  toast(tf('{0} 個のブロックを削除しました', ids.length), { label: '元に戻す', fn: () => nav.undo() });
   return true;
 }
 
@@ -377,7 +392,7 @@ export function copySel() {
   if (!ids.length) return false;
   const s = script();
   ui.clip = { kind: 'blocks', data: ids.map((id) => clone(findBlock(s, id).block)) };
-  toast(`${ids.length} 個のブロックをコピーしました`);
+  toast(tf('{0} 個のブロックをコピーしました', ids.length));
   return true;
 }
 
@@ -426,20 +441,20 @@ function fillBlocks() {
   els.pal.textContent = '';
   const fns = fnNames(proj());
   for (const cat of BLOCK_CATS) {
-    let defs = [...blocks.values()].filter((d) => d.cat === cat.id).map((d) => ({ d, title: d.title, make: () => ({ type: d.type }) }));
-    if (cat.id === 'Control') fns.forEach((n) => defs.push({ d: blocks.get('call_fn'), title: `ƒ ${n} を実行`, make: () => ({ type: 'call_fn', args: { name: n } }) }));
-    defs = defs.filter((x) => !q || (x.title + cat.label + cat.ja + x.d.type).toLowerCase().includes(q));
+    let defs = [...blocks.values()].filter((d) => d.cat === cat.id).map((d) => ({ d, title: blockTitle(d), make: () => ({ type: d.type }) }));
+    if (cat.id === 'Control') fns.forEach((n) => defs.push({ d: blocks.get('call_fn'), title: tf('ƒ {0} を実行', n), make: () => ({ type: 'call_fn', args: { name: n } }) }));
+    defs = defs.filter((x) => !q || (x.title + (x.d.en || '') + x.d.title + cat.label + cat.ja + x.d.type).toLowerCase().includes(q));
     if (!defs.length) continue;
     const key = 'bpal:' + cat.id, closed = ui.collapsed.has(key) && !q;
     els.pal.append(h('div', { class: 'cat' },
       h('button', { class: 'cat-head', style: { '--cat': cat.color }, onclick: () => { closed ? ui.collapsed.delete(key) : ui.collapsed.add(key); fillBlocks(); } },
-        closed ? '▸ ' : '▾ ', h('span', { class: 'b-ico' }, cat.icon), ` ${cat.ja} · ${cat.label}`),
+        closed ? '▸ ' : '▾ ', h('span', { class: 'b-ico shape-' + cat.shape }, cat.icon), ' ' + catName(cat)),
       closed ? null : h('div', { class: 'cat-body' }, defs.map(({ d, title, make }) => {
         const isHat = d.kind === 'hat';
         return h('div', { class: 'blk-item', style: { '--cat': cat.color, '--pat': cat.pattern }, draggable: isHat ? null : 'true', title: isHat ? 'クリックで新規スクリプトを作成' : 'クリックで追加 / ドラッグで配置',
           ondragstart: (e) => { const m = make(); e.dataTransfer.setData('application/x-codiram-block', JSON.stringify({ kind: 'new', type: m.type, args: m.args })); e.dataTransfer.effectAllowed = 'copy'; document.body.classList.add('dragging-blocks'); },
           ondragend: () => document.body.classList.remove('dragging-blocks'),
-          onclick: () => (isHat ? createScript(d.type) : addBlock(make())) }, h('span', { class: 'b-ico' }, d.icon), h('span', {}, title));
+          onclick: () => (isHat ? createScript(d.type) : addBlock(make())) }, h('span', { class: 'b-ico shape-' + cat.shape }, d.icon), h('span', {}, title));
       }))));
   }
 }

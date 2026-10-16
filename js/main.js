@@ -1,6 +1,7 @@
 // Codiram — entry point: top bar, view switching, global shortcuts.
 import './components.js';
 import './blocks.js';
+import './blocks-extra.js';
 import { h, download, isTypingTarget, fmtDate } from './util.js';
 import { store, ui, subscribe, emit, undo, redo, jumpTo, saveNow, nav, saveAs, newProject, listProjects, openProject } from './store.js';
 import { lint } from './model.js';
@@ -11,6 +12,9 @@ import { renderData } from './views/data.js';
 import { renderLogic, logicKey } from './views/logic.js';
 import { renderPreview, run as runPreview } from './views/preview.js';
 import { openExport } from './export.js';
+import { LANGS, getLang, setLang, tf, t, L } from './i18n.js';
+import './i18n-dict.js';
+import { fontSelect } from './views/fontpicker.js';
 
 const topbar = document.getElementById('topbar');
 const main = document.getElementById('main');
@@ -51,8 +55,9 @@ nav.go = (view) => {
 nav.run = () => { if (ui.view === 'preview') runPreview(); else nav.go('preview'); };
 nav.undo = () => doUndo();
 
-function doUndo() { const l = undo(); if (l === false) toast('これ以上戻せません'); else toast('↶ 元に戻しました: ' + l); }
-function doRedo() { const l = redo(); if (l === false) toast('やり直す操作がありません'); else toast('↷ やり直しました: ' + l); }
+const histLabel = (l) => { const m = /^(Add|Edit|Delete|Insert|Rename|Create|Duplicate) (.+)$/.exec(l); return m ? t(m[1] + ' ') + t(m[2]) : t(l); };
+function doUndo() { const l = undo(); if (l === false) toast('これ以上戻せません'); else toast(tf('↶ 元に戻しました: {0}', histLabel(l))); }
+function doRedo() { const l = redo(); if (l === false) toast('やり直す操作がありません'); else toast(tf('↷ やり直しました: {0}', histLabel(l))); }
 
 subscribe((origin) => {
   if (origin === 'status') { updateStatus(); return; }
@@ -66,7 +71,7 @@ function updateStatus() {
   const el = document.getElementById('save-status');
   if (!el) return;
   const m = { saved: ['✓ Saved', ''], saving: ['保存中…', ''], error: ['⚠ 保存に失敗', 'bad'] }[store.status];
-  el.textContent = m[0]; el.className = 'status ' + m[1];
+  el.textContent = t(m[0]); el.className = 'status ' + m[1];
 }
 
 function renderTopbar() {
@@ -79,7 +84,7 @@ function renderTopbar() {
       h('b', {}, 'Codiram')),
   );
   if (!inProject) {
-    topbar.append(h('span', { class: 'sp' }), themeBtn());
+    topbar.append(h('span', { class: 'sp' }), langBtn(), themeBtn());
     return;
   }
   const probs = lint(p).length + ui.errors.length;
@@ -90,21 +95,23 @@ function renderTopbar() {
     h('button', { class: 'icon-btn', title: 'Redo (Ctrl+Y)', disabled: !store.redoStack.length, onclick: doRedo }, '↷'),
     h('button', { class: 'icon-btn', title: '履歴 History', onclick: (e) => historyMenu(e.currentTarget) }, '🕘'),
     h('nav', { class: 'nav', role: 'tablist' }, VIEWS.map((v) => h('button', { class: 'nav-tab' + (ui.view === v ? ' on' : ''), role: 'tab', 'aria-selected': ui.view === v, onclick: () => nav.go(v) },
-      v[0].toUpperCase() + v.slice(1), v === 'logic' && probs ? h('b', { class: 'warn', title: probs + ' 件の問題' }, ' ⚠' + probs) : null))),
+      v[0].toUpperCase() + v.slice(1), v === 'logic' && probs ? h('b', { class: 'warn', title: tf('{0} 件の問題', probs) }, ' ⚠' + probs) : null))),
     h('span', { class: 'sp' }),
     h('button', { class: 'btn run', title: 'Run (F5)', onclick: () => nav.run() }, '▶ Run'),
     h('button', { class: 'btn', title: 'Export', onclick: () => { saveNow(); openExport(store.project); } }, '⬇ Export'),
-    themeBtn());
+    langBtn(), themeBtn());
   updateStatus();
 }
+
+const langBtn = () => h('button', { class: 'btn small lang-btn', title: 'Language / 言語', onclick: (e) => menu(e.currentTarget, LANGS.map((l) => ({ label: (l.id === getLang() ? '✓ ' : '　') + l.label, onClick: () => { setLang(l.id); mount(); renderTopbar(); } }))) }, '🌐 ' + (LANGS.find((l) => l.id === getLang())?.label || ''));
 
 const themeBtn = () => h('button', { class: 'icon-btn', title: 'ライト/ダーク切替', onclick: () => { theme = theme === 'dark' ? 'light' : 'dark'; applyTheme(theme); renderTopbar(); } }, theme === 'dark' ? '☀' : '☾');
 
 function historyMenu(anchor) {
   const st = store.undoStack;
   if (!st.length) { toast('履歴はまだありません'); return; }
-  menu(anchor, st.map((e, i) => ({ label: `${i + 1}. ${e.label}`, hint: '', i })).reverse().slice(0, 25)
-    .map((it) => ({ label: it.label, hint: it.i === st.length - 1 ? '最新' : '', onClick: () => { jumpTo(it.i); toast('履歴を戻しました'); } })));
+  menu(anchor, st.map((e, i) => ({ label: e.label, hint: '', i })).reverse().slice(0, 25)
+    .map((it) => ({ label: `${it.i + 1}. ${histLabel(it.label)}`, hint: it.i === st.length - 1 ? '最新' : '', onClick: () => { jumpTo(it.i); toast('履歴を戻しました'); } })));
 }
 
 function projectMenu(anchor) {
@@ -125,11 +132,20 @@ function projectMenu(anchor) {
 async function settings() {
   const p = store.project;
   const name = h('input', { class: 'inp', value: p.name }), title = h('input', { class: 'inp', value: p.settings?.title || p.name });
-  const ok = await dialog({ title: 'Project Settings', body: h('div', { class: 'form' }, h('label', {}, 'プロジェクト名', name), h('label', {}, 'アプリのタイトル (HTML <title>)', title)),
+  let font = p.settings?.font || '';
+  let appLang = p.settings?.appLang || 'ja';
+  const fontHolder = h('div', {});
+  const drawFont = () => { fontHolder.textContent = ''; fontHolder.append(fontSelect(font, (v) => { font = v; drawFont(); })); };
+  drawFont();
+  const langSel = h('select', { class: 'sel', onchange: (e) => { appLang = e.target.value; } }, LANGS.map((l) => h('option', { value: l.id, selected: l.id === appLang }, l.label)));
+  const ok = await dialog({ title: 'Project Settings', body: h('div', { class: 'form' },
+    h('label', {}, 'プロジェクト名', name), h('label', {}, 'アプリのタイトル (HTML <title>)', title),
+    h('label', {}, 'アプリ全体のフォント (Google Fonts / 内蔵フォント)', fontHolder),
+    h('label', {}, '完成アプリの言語 (<html lang>)', langSel)),
     actions: [{ label: 'キャンセル', value: false }, { label: 'OK', primary: true, value: 'ok' }] });
   if (ok !== 'ok') return;
   const { commit } = await import('./store.js');
-  commit('Project settings', (pp) => { pp.name = name.value.trim() || pp.name; pp.settings = { ...pp.settings, title: title.value.trim() }; });
+  commit('Project settings', (pp) => { pp.name = name.value.trim() || pp.name; pp.settings = { ...pp.settings, title: title.value.trim(), font, appLang }; });
 }
 
 // ---------- keyboard ----------
