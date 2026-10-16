@@ -13,10 +13,10 @@ import { TEMPLATES } from '../js/templates.js';
 import { emptyProject, newScript, newBlock } from '../js/model.js';
 
 // ---- registry
-assert.deepEqual(GeneratorRegistry.list().map((g) => g.id), ['web', 'desktop', 'rust-cli']);
+assert.deepEqual(GeneratorRegistry.list().map((g) => g.id), ['web', 'desktop', 'rust-cli', 'python']);
 assert.ok(GeneratorRegistry.get('minecraft').hidden, 'minecraft is paused (hidden)');
 assert.ok(GeneratorRegistry.list({ includeHidden: true }).some((g) => g.id === 'minecraft'));
-assert.deepEqual(GeneratorRegistry.findByCapability('cli').map((g) => g.id), ['rust-cli']);
+assert.deepEqual(GeneratorRegistry.findByCapability('cli').map((g) => g.id), ['rust-cli', 'python']);
 assert.ok(GeneratorRegistry.findByCapability('dialog').some((g) => g.id === 'desktop'));
 assert.throws(() => defineGenerator({ id: 'x', name: { ja: 'x', en: 'x' }, generate() {}, supports: ['nope'] }), /unknown capabilities/);
 const tmp = defineGenerator({ id: 'tmp-gen', name: { ja: 'T', en: 'T' }, generate: () => ({ files: {}, problems: [] }), supports: ['variables'] });

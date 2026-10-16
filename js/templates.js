@@ -456,7 +456,7 @@ export const TEMPLATES = [
     },
   },
   {
-    id: 'cli_hello', target: 'rust-cli', name: 'Hello CLI', desc: '名前を聞いてあいさつするコマンドラインアプリ(Rust)',
+    id: 'cli_hello', target: 'rust-cli', requires: ['cli', 'io'], name: 'Hello CLI', desc: '名前を聞いてあいさつするコマンドラインアプリ(Rust)',
     build() {
       const p = emptyProject('Hello CLI', { type: 'rust-cli', crateName: 'hello_cli', version: '0.1.0', author: '', description: 'Hello CLI' });
       p.variables.push({ name: 'name', type: 'String', initial: '' });
@@ -471,7 +471,7 @@ export const TEMPLATES = [
     },
   },
   {
-    id: 'cli_fizzbuzz', target: 'rust-cli', name: 'FizzBuzz', desc: '繰り返し・条件・関数・数値演算のサンプル(Rust)',
+    id: 'cli_fizzbuzz', target: 'rust-cli', requires: ['cli', 'io'], name: 'FizzBuzz', desc: '繰り返し・条件・関数・数値演算のサンプル(Rust)',
     build() {
       const p = emptyProject('FizzBuzz', { type: 'rust-cli', crateName: 'fizzbuzz', version: '0.1.0', author: '', description: 'FizzBuzz' });
       p.variables.push({ name: 'i', type: 'Number', initial: '0' });

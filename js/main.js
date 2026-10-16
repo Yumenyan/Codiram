@@ -6,6 +6,7 @@ import './blocks-reporters.js';
 import './blocks-game.js';
 import './blocks-more.js';
 import './targets/index.js';
+import { loadUserGenerators } from './sdk/external.js';
 import { h, download, isTypingTarget, fmtDate } from './util.js';
 import { store, ui, subscribe, emit, undo, redo, jumpTo, saveNow, nav, saveAs, newProject, listProjects, openProject, setActiveTarget, commit } from './store.js';
 import { targets, GeneratorRegistry, activeTarget, activeTargetId } from './registry.js';
@@ -129,6 +130,7 @@ function targetChip() {
       { sep: true },
       ...(t.configFields.length || t.supports?.length ? [{ label: 'Target Settings…', onClick: () => openTargetSettings(t.id, { onDone: () => nav.go(ui.view) }) }] : []),
       ...others.map((d) => ({ label: tf('＋ {0} を追加…', d.icon + ' ' + L(d.name)), onClick: async () => { if (await openTargetSettings(d.id, { isNew: true })) { setActiveTarget(d.id); nav.go('logic'); } } })),
+      { label: '🛠 Generator Builder…', onClick: async () => { const { openBuilder } = await import('./views/builder.js'); await openBuilder(); renderTopbar(); } },
       ...(p.targets.length > 1 ? [{ label: 'このターゲットを削除', onClick: async () => { if (await confirmDlg('ターゲットを削除', tf('{0} の設定を削除します(ロジックは残ります / Undoで戻せます)。', L(t.name)), '削除')) { const id = t.id; commit('Remove target', (pp) => { pp.targets = pp.targets.filter((x) => x.type !== id); }); setActiveTarget(p.targets[0].type); nav.go('logic'); } } }] : []),
     ]);
   } }, t.icon, h('span', {}, L(t.name)), h('small', {}, '▾'));
@@ -217,5 +219,6 @@ document.addEventListener('keydown', (e) => {
 
 addEventListener('beforeunload', () => { if (store.project) saveNow(); });
 
+loadUserGenerators().forEach((f) => console.warn('Generator not loaded:', f.id, f.error));
 loadInstalledPlugins().finally(() => { mount(); renderTopbar(); });
 window.__codiram = { store, ui, nav, emit };

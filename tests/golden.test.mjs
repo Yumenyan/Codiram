@@ -39,7 +39,14 @@ for (const g of GOLDEN) {
       for (const [n, c] of Object.entries(res.files)) { fs.mkdirSync(path.dirname(path.join(dir, n)), { recursive: true }); fs.writeFileSync(path.join(dir, n), c); }
       const env = { ...process.env, CARGO_TARGET_DIR: path.join(os.tmpdir(), 'codiram-rust-target') };
       execFileSync(b.tool, b.args, { cwd: dir, env, stdio: 'pipe' });
-      if (g.stdout != null && genId === 'rust-cli') assert.equal(execFileSync('cargo', ['run', '--quiet', '--offline'], { cwd: dir, env, encoding: 'utf8' }), g.stdout);
+      built++;
+    }
+    const r = gen.verify.run;
+    if (r && g.stdout != null && has(r.tool)) {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codiram-golden-'));
+      for (const [n, c] of Object.entries(res.files)) { fs.mkdirSync(path.dirname(path.join(dir, n)), { recursive: true }); fs.writeFileSync(path.join(dir, n), c); }
+      const env = { ...process.env, CARGO_TARGET_DIR: path.join(os.tmpdir(), 'codiram-rust-target') };
+      assert.equal(execFileSync(r.tool, r.args, { cwd: dir, env, encoding: 'utf8' }), g.stdout, `${key}: program output`);
       built++;
     }
   }

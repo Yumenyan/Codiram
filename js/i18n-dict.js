@@ -198,3 +198,10 @@ alias('Hello CLI', 'Hello CLI'); alias('名前を聞いてあいさつするコ�
 alias('繰り返し・条件・関数・数値演算のサンプル(Rust)', 'Loops, conditions, functions and arithmetic (Rust)');
 alias('ファイルを開く/保存するテキストエディタ(デスクトップ向け。ブラウザでも動作)', 'Text editor that opens / saves files (desktop; also works in a browser)');
 alias('プロジェクト名', 'Project name');
+// Generator Builder
+alias('🛠 Generator Builder…', '🛠 Generator Builder…');
+alias('修正が必要です: ', 'Needs fixing: ');
+alias('この定義でサンプルプログラムを生成できます', 'This definition generates the sample program');
+alias('保存して登録', 'Save and register');
+alias('閉じる', 'Close');
+alias('空のプロジェクト', 'Empty project');

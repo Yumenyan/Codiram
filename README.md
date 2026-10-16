@@ -25,6 +25,8 @@ Codiram は **Generator** を選んで、同じビジュアルなロジックか
 | 🌐 Web アプリ | HTML / CSS / JavaScript | Design / Data / Logic / Preview |
 | 🖥 デスクトップ (Tauri) | Web アプリ + **Tauri 1.x プロジェクト**(ファイル選択・クリップボード・通知・ウィンドウ操作ブロック) | Design / Data / Logic / Preview |
 | 🦀 Rust CLI | **Cargo プロジェクト**(std のみ。`cargo run` で実行) | Data / Logic / Output |
+| 🐍 Python CLI | Python スクリプト(定義データのみで作られた Generator) | Data / Logic / Output |
+| 🛠 自作 Generator | **Generator Builder** で言語ルールを入力して登録(コード不要)。Export / Scaffold / Import / プラグイン配布に対応 | Data / Logic / Output |
 
 * New Project でターゲットとテンプレートを選択(Web テンプレートはデスクトップでも使えます)
 * ブロックは対応 Generator と必要な Capability を持ち、現在のターゲットで使えるものだけがパレットに表示されます。非対応ブロックを使うと「Rust CLI は「ボタンがクリックされたとき」に対応していません」のように検証されます

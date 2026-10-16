@@ -84,3 +84,21 @@ GeneratedProject = { files, problems, root, entry, generator }                //
 ### Future (not implemented, structure is ready)
 The manifest, capability list, project template, mapping table and verify spec are all plain data, so a Generator Builder
 can later scaffold `js/targets/<id>/` from a form (target, language, capabilities, template, mappings, build command).
+
+## Generator Builder, scaffold and external generators
+
+A **generator spec** (`format: "codiram-generator"`) describes a generator entirely as data: manifest, capabilities,
+`rules` (how each operation is written in the target language), `program` (main file template) and `files` (rest of the
+project template), `verify`. `sdk/declarative.js` turns a spec into a real generator by walking the semantic model and
+filling the rules — **a new text-language generator needs no code** (Python CLI is built this way: `sdk/presets.js`).
+
+| | |
+|---|---|
+| Generator Builder (`views/builder.js`) | topbar target chip → *Generator Builder…* (or the Start screen). Edit the spec with a live preview of a sample program; **Save** installs it as an external generator (kept in the browser, offered in New Project), **Export** writes `<id>.codiram-generator.json`, **Scaffold (ZIP)** writes `js/targets/<id>/` source files (`sdk/scaffold.js`, kinds `declarative` / `custom`), **Import** loads a spec file |
+| External generators (`sdk/external.js`) | install / uninstall / reload specs, built-in ids are protected. Specs contain no code, so installing one cannot run anything |
+| Plugins | `registerPlugin({ id, name, generators: [spec | defineGenerator-spec] })`; code plugins also get `api.defineGenerator` |
+| Rules reference | statements (`comment globalDecl set log ifOpen elseOpen close repeatOpen wait call fnOpen fnGlobals mainOpen indent emptyBody`), values (`true false not toStr toNum concat …`), `calls` (contains / isEmpty / pow / random / ternary), console & files (`print readLine arg exit readFile writeFile …`), `imports` / `helpers` keyed by what the program uses |
+
+Limits (by design): text languages with statement/expression syntax like the presets. Targets with unusual structure
+(static typing like Rust, project formats like Tauri) keep a code generator built from the same SDK pieces; the
+`custom` scaffold is the starting point.

@@ -12,7 +12,7 @@
 //     views:[..], defaultConfig(), configFields:[..], validateConfig(cfg), // UI
 //     check?(project, cfg) -> problems, generate(project, cfg) -> { files, problems, root },
 //   })
-import { GeneratorRegistry, targets } from '../registry.js';
+import { GeneratorRegistry, targets, hooks } from '../registry.js';
 import { targetConfig } from '../model.js';
 import { missingCapabilities } from './features.js';
 import { tf } from '../i18n.js';
@@ -53,6 +53,7 @@ export function defineGenerator(spec) {
   };
   return GeneratorRegistry.register(gen);
 }
+hooks.defineGenerator = defineGenerator;
 
 /** The manifest of a generator (what it is, what it can do) as plain JSON. */
 export const manifestOf = (gen) => ({ id: gen.id, name: gen.name.en, version: gen.version, language: gen.language, platforms: gen.platforms, supports: gen.supports });

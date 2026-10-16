@@ -31,8 +31,8 @@ export function webGolden(targetCfg = { type: 'web' }) {
   return p;
 }
 
-export function cliGolden() {
-  const p = emptyProject('Golden CLI', { type: 'rust-cli', crateName: 'golden_cli', version: '0.1.0', author: '', description: 'golden' });
+export function cliGolden(targetCfg = { type: 'rust-cli', crateName: 'golden_cli', version: '0.1.0', author: '', description: 'golden' }) {
+  const p = emptyProject('Golden CLI', targetCfg);
   p.variables.push({ name: 'total', type: 'Number', initial: '0' }, { name: 'label', type: 'String', initial: 'sum' });
   const f = newScript(p, 'main', 'onFunction', { name: 'add', params: 'n' });
   f.body.push(blk('change_var', { name: 'total', by: 'n' }));
@@ -47,5 +47,5 @@ export function cliGolden() {
 /** which generators each golden project is for */
 export const GOLDEN = [
   { id: 'web-golden', generators: [['web', () => webGolden()], ['desktop', () => webGolden({ type: 'desktop', appName: 'Golden', identifier: 'com.example.golden', version: '1.0.0', width: 800, height: 600 })]] },
-  { id: 'cli-golden', generators: [['rust-cli', () => cliGolden().project]], stdout: cliGolden().stdout },
+  { id: 'cli-golden', generators: [['rust-cli', () => cliGolden().project], ['python', () => cliGolden({ type: 'python', version: '0.1.0' }).project]], stdout: cliGolden().stdout },
 ];

@@ -95,7 +95,7 @@ defineGenerator({
   generate,
   verify: {
     requiredFiles: ['Cargo.toml', 'src/main.rs', 'README.md'], contains: { 'src/main.rs': [/fn main\(\)/] },
-    build: { tool: 'cargo', args: ['build', '--offline', '--quiet'] },
+    run: { tool: 'cargo', args: ['run', '--quiet', '--offline'] },
   },
   lint: (project) => {
     const cfg = targetConfig(project, 'rust-cli');

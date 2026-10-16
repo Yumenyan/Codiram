@@ -274,3 +274,16 @@ textarea.inp { width: 100%; resize: vertical; }
 .gen-info { margin-top: 8px; border-top: 1px solid var(--line, #ddd); padding-top: 8px; }
 .gen-info summary { cursor: pointer; font-weight: 600; }
 .cap-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.builder .bld-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.builder .bld-cols { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(300px, 1fr); gap: 12px; }
+.builder .bld-form { max-height: 62vh; overflow: auto; padding-right: 6px; }
+.builder .bld-form details { border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+.builder .bld-form summary { cursor: pointer; font-weight: 600; }
+.builder .bld-field { display: grid; gap: 2px; margin: 6px 0; font-size: 12px; }
+.builder .bld-field .inp { width: 100%; box-sizing: border-box; }
+.builder .cap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; margin-top: 6px; }
+.builder .bld-right { max-height: 62vh; overflow: auto; min-width: 0; }
+.builder .bld-status { font-size: 12px; padding: 6px 8px; border-radius: 6px; background: rgba(34,197,94,.12); margin-bottom: 8px; }
+.builder .bld-status.bad { background: rgba(239,68,68,.14); }
+.builder .code { max-height: 46vh; overflow: auto; }
+@media (max-width: 800px) { .builder .bld-cols { grid-template-columns: 1fr; } }

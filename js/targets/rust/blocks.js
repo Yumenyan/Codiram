@@ -10,15 +10,15 @@ const X = (ph) => ({ t: 'expr', ph });
 const sel = (o) => ({ t: 'select', opts: o });
 const cliStmt = (type, icon, ja, en, parts, fields, defaults, caps, ir) => {
   stmt(type, 'System', icon, ja, parts, fields, defaults, () => [], undefined);
-  Object.assign(blocks.get(type), { targets: CLI, en, caps, ir });
+  Object.assign(blocks.get(type), { targets: CLI, portable: true, en, caps, ir });
 };
 const cliVal = (type, icon, ja, en, parts, fields, defaults, caps, irExpr, bool = false) => {
   R(type, 'System', icon, ja, en, parts, fields, defaults, () => '""', { bool });
-  Object.assign(blocks.get(type), { targets: CLI, caps, irExpr });
+  Object.assign(blocks.get(type), { targets: CLI, portable: true, caps, irExpr });
 };
 
 hat('cli_main', J('プログラムが開始されたとき', 'When the program starts'), [J('プログラムが開始されたとき', 'When the program starts')], {}, {}, () => []);
-Object.assign(blocks.get('cli_main'), { targets: CLI, en: 'When the program starts', caps: ['cli'], irHat: () => ({ kind: 'main' }) });
+Object.assign(blocks.get('cli_main'), { targets: CLI, portable: true, en: 'When the program starts', caps: ['cli'], irHat: () => ({ kind: 'main' }) });
 
 cliStmt('cli_print', '🖨', '画面に出力', 'Print', [E('value'), J('を', 'Print'), E('nl'), J('出力', '')],
   { value: X('"Hello, world!"'), nl: sel([['1', J('改行つきで', 'with a newline')], ['0', J('改行なしで', 'without a newline')]]) }, { value: '"Hello, world!"', nl: '1' }, ['io'],

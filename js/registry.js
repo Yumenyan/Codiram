@@ -58,16 +58,21 @@ export const registerExporter = (def) => exporters.set(def.id, def);
 
 /**
  * Plugin shape (all keys optional):
- * { id, name, components: [], blocks: [], exporters: [], install(api) }
+ * { id, name, components: [], blocks: [], exporters: [], generators: [], install(api) }
  * Future: dataTypes, dataSources, templates.
  */
+/** Filled in by the Generator SDK (registry.js must not import it): lets plugins ship generators. */
+export const hooks = {};
+
 export function registerPlugin(plugin) {
   plugins.push(plugin);
   (plugin.components || []).forEach(registerComponent);
   (plugin.blocks || []).forEach(registerBlock);
   (plugin.exporters || []).forEach(registerExporter);
   Object.assign(pluginModules, plugin.modules || {});
-  plugin.install?.({ registerComponent, registerBlock, registerExporter });
+  // generators: full specs for defineGenerator(), or declarative generator specs (pure data, format 'codiram-generator')
+  (plugin.generators || []).forEach((g) => (g.format === 'codiram-generator' ? hooks.defineDeclarativeGenerator(g) : hooks.defineGenerator(g)));
+  plugin.install?.({ registerComponent, registerBlock, registerExporter, defineGenerator: (g) => hooks.defineGenerator(g), defineDeclarativeGenerator: (g) => hooks.defineDeclarativeGenerator(g) });
 }
 
 // color + shape + icon + label are all used so categories never rely on colour alone.
