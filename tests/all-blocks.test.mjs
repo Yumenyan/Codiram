@@ -2,7 +2,7 @@
 // Run: node tests/all-blocks.test.mjs
 import { generate } from '../js/generator.js';
 import { emptyProject, createNode, newScript, newBlock, newModel, lint } from '../js/model.js';
-import { blocks } from '../js/registry.js';
+import { blocks, blockSupports } from '../js/registry.js';
 const p = emptyProject('T');
 const m = newModel(p, 'M'); m.fields=[{name:'id',type:'Number'},{name:'name',type:'String'}]; p.models.push(m);
 for (const n of ['v1','lst','obj']) p.variables.push({name:n,type:n==='lst'?'Array':n==='obj'?'Object':'Number',initial:n==='lst'?'[1,2,3]':n==='obj'?'{}':'0'});
@@ -24,6 +24,7 @@ const fill = (b) => {
 let n=0;
 const fnScript = newScript(p,'main','onFunction',{name:'f1'}); p.scripts.push(fnScript);
 for (const [type,def] of blocks) {
+  if (!blockSupports(def, 'web')) continue; // other targets are covered by their own tests
   let s;
   if (def.kind==='reporter') { const r = newBlock(type); r.args = { ...r.args }; const rb = { id:'r1', type, args: r.args }; fill(rb);
     s = newScript(p,'main','onClick',{target:btn.id}); s.body.push(newBlock('set_var',{name:'v1',value:{$b:rb}}));

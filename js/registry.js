@@ -8,7 +8,31 @@ export const plugins = [];
 export const pluginModules = {}; // extra runtime code from plugins (name -> JS source)
 
 export const registerComponent = (def) => components.set(def.type, def);
-export const registerBlock = (def) => blocks.set(def.type, def);
+/** Every block declares which targets it can be used for ('web', 'minecraft', …). Default: web only. */
+export const registerBlock = (def) => { def.targets = def.targets || ['web']; blocks.set(def.type, def); };
+/**
+ * Can this block be used for the target? The Web target generates straight from blocks; other targets go through the IR,
+ * so the block needs an `ir` (command), `irHat` (event) or `irExpr` (value block, asValue=true) implementation.
+ */
+export function blockSupports(def, targetId, asValue = false) {
+  if (!def || !(def.targets || ['web']).includes(targetId)) return false;
+  if (targetId === 'web') return true;
+  return asValue ? !!def.irExpr : def.kind === 'hat' ? !!def.irHat : def.kind === 'reporter' ? false : !!def.ir;
+}
+
+/**
+ * Targets (execution environments Codiram can generate for). See docs/ARCHITECTURE.md.
+ * { id, name:{ja,en}, icon, desc, views:[...], configFields:[...], defaultConfig(), generate(project, cfg) -> { files, problems }, lint?(project) }
+ */
+export const targets = new Map();
+export const registerTarget = (def) => {
+  targets.set(def.id, def);
+  const sorted = [...targets.values()].sort((a, b) => (a.order ?? 9) - (b.order ?? 9));
+  targets.clear();
+  sorted.forEach((t) => targets.set(t.id, t));
+};
+export const activeTargetId = (project) => project?.activeTarget || project?.targets?.[0]?.type || 'web';
+export const activeTarget = (project) => targets.get(activeTargetId(project));
 export const registerExporter = (def) => exporters.set(def.id, def);
 
 /**
@@ -42,6 +66,7 @@ export const BLOCK_CATS = [
   { id: 'Sound', label: 'Sound', ja: 'サウンド', icon: '♪', color: '#db2777', shape: 'circle' },
   { id: 'Draw', label: 'Draw', ja: '描画', icon: '✎', color: '#0891b2', shape: 'diamond' },
   { id: 'Animation', label: 'Animation', ja: 'アニメーション', icon: '✦', color: '#ea580c', shape: 'diamond' },
+  { id: 'Minecraft', label: 'Minecraft', ja: 'Minecraft', icon: '⛏', color: '#5b8c2a', shape: 'square' },
   { id: 'System', label: 'System', ja: 'システム', icon: '⚙', color: '#334155', shape: 'hex' },
 ];
 export const catOf = (id) => BLOCK_CATS.find((c) => c.id === id) || BLOCK_CATS[0];

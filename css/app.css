@@ -239,3 +239,15 @@ textarea.inp { width: 100%; resize: vertical; }
 .f.code { border-radius: 8px; min-width: 280px; width: 100%; resize: vertical; white-space: pre; }
 .tpl-list { grid-template-columns: repeat(2, minmax(240px, 1fr)); max-height: 62vh; overflow: auto; min-width: 520px; }
 .pack { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; cursor: pointer; }
+
+/* ---- targets / output view ---- */
+.view.output { display: flex; flex-direction: column; }
+.output-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr); }
+.out-side { display: flex; flex-direction: column; min-height: 0; overflow: auto; background: var(--panel); border-right: 1px solid var(--border); }
+.out-code { margin: 0; border-radius: 0; border: 0; overflow: auto; min-height: 0; height: 100%; }
+.target-chip { display: inline-flex; gap: 6px; align-items: center; margin-left: 4px; }
+.notice { background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border)); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; }
+.target-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
+.target-card { display: flex; flex-direction: column; text-align: left; gap: 2px; padding: 10px 14px; border: 1px solid var(--border); background: var(--panel); border-radius: 10px; }
+.target-card.on { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 1px var(--accent); }
+.form .errs { color: var(--danger); font-size: 12px; }

@@ -137,6 +137,35 @@ addPairs([
   ['Console', 'コンソール'], ['Options / reference', '選択肢 / 参照先'], ['Duplicate page', 'ページを複製'], ['Insert data…', 'データを挿入'],
 ]);
 
+addPairs([
+  ['Target — the environment to generate for', 'Target — 生成する実行環境'], ['Target Settings…', 'ターゲット設定…'], ['Remove this target', 'このターゲットを削除'], ['Remove target', 'ターゲットを削除'],
+  ['＋ {0} を追加…', '＋ {0} を追加…'], ['Add {0}…', '＋ {0} を追加…'],
+  ['Remove the settings of {0} (logic is kept / Undo available).', '{0} の設定を削除します(ロジックは残ります / Undoで戻せます)。'],
+  ['{0} — Settings', '{0} — 設定'], ['Output — {0}', 'Output — {0}'], ['Output', 'アウトプット'], ['Files', 'ファイル'], ['Copy', 'コピー'],
+  ['Edit Logic and the code here updates (read-only)', 'Logic を編集すると、ここのコードが更新されます(読み取り専用)'],
+  ['New Project — choose target and template', 'New Project — ターゲットとテンプレートを選択'], ['Mod name', 'Mod 名'],
+  ['Mod ID (a-z, 0-9, _ ; used for the file name and in-game id)', 'Mod ID(半角英小文字・数字・_ / ファイル名やゲーム内IDになります)'],
+  ['Create your first script', '最初のスクリプトを作る'], ['＋ Create your first script', '＋ 最初のスクリプトを作る'], ['Project name', 'プロジェクト名'],
+  ['Only variables are available for this target (data models and assets are for the Web target).', 'このターゲットでは「変数」のみ使えます(データモデル・アセットは Web ターゲット向けです)。'],
+  ['Exported as an ordinary project (Gradle). It does not depend on any Codiram runtime. Follow the build steps in README.md.', '通常のプロジェクト(Gradle)として書き出します。Codiram 専用のランタイムには依存しません。README.md のビルド手順に従ってください。'],
+  ['Export — as an ordinary project', 'Export — 普通のプロジェクトとして書き出し'],
+  ['⚠ {0} unresolved problem(s) (the output may be incomplete): {1}', '⚠ 未解決の問題が {0} 件あります(生成物が完全でない可能性): {1}'],
+  ['▶ Output', '▶ アウトプット'], ['Hello Minecraft', 'Hello Minecraft'], ['Show a message when a player joins (the first success route)', 'プレイヤーが参加したらメッセージを表示(最初の成功ルート)'],
+  ['Welcome Kit', 'ウェルカムキット'], ['Welcome message + bread / sneak right-click with a stick to jump / reward for breaking diamond ore', '参加メッセージ+パン配布 / スニーク右クリックでジャンプ台 / ダイヤ鉱石を壊すと報酬'],
+  ['Show the place on a map when chosen (Map component, data lookup, value blocks)', '場所を選ぶと地図が移動(Map部品・データ検索・値ブロック)'],
+  ['App: Map', 'アプリ: 地図'],
+  ['Mod ID must start with a lowercase letter and use only a-z, 0-9 and _ (2-64 chars)', 'Mod ID は 小文字英字で始まり、小文字・数字・_ のみ(2〜64文字)で指定してください'],
+  ['Java package must look like com.example.mymod (lowercase letters, digits, _ separated by dots)', 'パッケージ名は com.example.mymod のように小文字・数字・_ を . で区切って指定してください'],
+  ['Mod name is empty', 'Mod 名が空です'], ['Unsupported Minecraft version', '未対応の Minecraft バージョンです'], ['Mod version must look like 1.0.0', 'Mod バージョンは 1.0.0 の形式で指定してください'],
+  ['"Wait" can only be used at the top level of a script (not inside loops or conditions)', '「待つ」は処理の一番外側(ループ・条件分岐の中ではなく)でのみ使えます'],
+  ['Item id is empty', 'アイテムIDが空です'], ['Block id is empty', 'ブロックIDが空です'],
+  ['Data models are not supported for Minecraft yet (variables only)', 'データモデルはまだ Minecraft では使えません(変数のみ対応)'],
+  ['This block cannot be used in {0}', 'このブロックは {0} では使えません'], ['This value block cannot be used in {0}', 'この値ブロックは {0} では使えません'],
+  ['Cannot assign to a function parameter', '関数の引数には代入できません'],
+  ['Return values of functions are not supported for Minecraft yet', '関数の戻り値は Minecraft ではまだ使えません'],
+  ['Block id can only be used in block events (right-click / break / place)', 'ブロックIDは ブロックのイベント(右クリック/壊す/置く)でのみ使えます'],
+]);
+
 // Code strings that differ slightly from the canonical English key
 alias('New Project — テンプレートを選択', 'New Project — choose a template');
 alias('履歴 History', 'History');
@@ -144,4 +173,7 @@ alias('Open (一覧)', 'Open (list)');
 alias('保存中…', 'Saving…');
 alias('Edit → Run → Use → Stop → Edit  (Preview のデータは保存されません)', 'Edit → Run → Use → Stop → Edit  (Preview data is not saved)');
 alias('Components パネルの表示/非表示', 'Toggle Components panel');
+alias('Target — 生成する実行環境', 'Target — the environment to generate for');
+alias('Logic を編集すると、ここのコードが更新されます(読み取り専用)', 'Edit Logic and the code here updates (read-only)');
+alias('コピー', 'Copy');
 alias('Properties パネルの表示/非表示', 'Toggle Properties panel');

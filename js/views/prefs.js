@@ -1,6 +1,6 @@
 // Dialogs: keyboard shortcut customisation and plugin manager.
 import { h } from '../util.js';
-import { L } from '../i18n.js';
+import { L, tf } from '../i18n.js';
 import { dialog, toast, confirmDlg } from '../ui-kit.js';
 import { ACTIONS, bindings, setBinding, resetBindings, isCustom, comboOf } from '../shortcuts.js';
 import { PACKS, packEnabled, setPackEnabled, installPlugin, uninstallPlugin, userPlugins } from '../plugins.js';
@@ -71,4 +71,37 @@ export async function openPlugins(onChange) {
   };
   draw();
   await dialog({ title: 'Plugins', wide: true, body, actions: [{ label: '閉じる', primary: true, value: true }] });
+}
+
+/** Project name + the settings of one target (generic form built from target.configFields). */
+export async function openTargetSettings(targetId, { isNew = false, onDone } = {}) {
+  const { targets } = await import('../registry.js');
+  const { store, commit } = await import('../store.js');
+  const target = targets.get(targetId);
+  const p = store.project;
+  const existing = p.targets.find((x) => x.type === targetId);
+  const cfg = { ...(existing || target.defaultConfig(
+    String(p.name || 'my_mod').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'my_mod', p.name)) };
+  const name = h('input', { class: 'inp', value: p.name });
+  const errs = h('div', { class: 'errs' });
+  const fields = target.configFields.map((f) => {
+    const input = f.opts ? h('select', { class: 'sel', onchange: (e) => { cfg[f.key] = e.target.value; } }, f.opts.map((o) => h('option', { selected: o === cfg[f.key] }, o)))
+      : h('input', { class: 'inp' + (f.key === 'modId' || f.key === 'package' ? ' mono' : ''), value: cfg[f.key] ?? '', placeholder: f.ph || '', oninput: (e) => { cfg[f.key] = e.target.value; } });
+    return h('label', {}, L(f.label), input);
+  });
+  const ok = await dialog({ title: tf('{0} — 設定', target.icon + ' ' + L(target.name)), wide: true,
+    body: h('div', { class: 'form' }, h('label', {}, 'プロジェクト名', name), ...fields, errs),
+    actions: [{ label: 'キャンセル', value: false }, { label: 'OK', primary: true, value: 'ok', onClick: () => {
+      const probs = target.validateConfig ? target.validateConfig(cfg) : [];
+      errs.textContent = probs.join(' / ');
+      return probs.length ? false : true;
+    } }] });
+  if (ok !== 'ok') return false;
+  commit(isNew ? 'Add target' : 'Target settings', (pp) => {
+    pp.name = name.value.trim() || pp.name;
+    const i = pp.targets.findIndex((x) => x.type === targetId);
+    if (i >= 0) pp.targets[i] = cfg; else pp.targets.push(cfg);
+  });
+  onDone?.();
+  return true;
 }

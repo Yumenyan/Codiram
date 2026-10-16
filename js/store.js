@@ -77,7 +77,7 @@ export function saveNow() {
   try {
     localStorage.setItem(KEY_P + store.project.id, JSON.stringify(store.project));
     const idx = listProjects().filter((p) => p.id !== store.project.id);
-    idx.push({ id: store.project.id, name: store.project.name, updated: store.project.updated });
+    idx.push({ id: store.project.id, name: store.project.name, updated: store.project.updated, target: store.project.activeTarget || 'web' });
     localStorage.setItem(KEY_INDEX, JSON.stringify(idx));
     setStatus('saved');
     return true;
@@ -107,8 +107,8 @@ export function openProject(id) {
   return true;
 }
 
-export function newProject(template) {
-  const p = template ? template.build() : emptyProject();
+export function newProject(template, opts) {
+  const p = template ? template.build(opts || {}) : emptyProject();
   reset(p);
   saveNow();
 }
@@ -148,6 +148,16 @@ export function duplicateProject(id) {
 const KEY_LIB = 'codiram.library';
 export const getLibrary = () => { try { return JSON.parse(localStorage.getItem(KEY_LIB) || '[]'); } catch { return []; } };
 export const setLibrary = (l) => { try { localStorage.setItem(KEY_LIB, JSON.stringify(l)); } catch { /* ignore */ } };
+
+/** Switch the project's active target (what Design/Logic/Export work on). */
+export function setActiveTarget(id) {
+  if (!store.project.targets.some((t) => t.type === id)) return false;
+  store.project.activeTarget = id;
+  store.project.updated = Date.now();
+  markDirty();
+  emit();
+  return true;
+}
 
 /** Navigation hook, assigned by main.js (avoids circular imports from views). */
 export const nav = { go: () => {}, run: () => {}, undo: () => {} };

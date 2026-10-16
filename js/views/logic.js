@@ -3,7 +3,9 @@ import { h, clone, sanitizeIdent } from '../util.js';
 import { blocks, BLOCK_CATS, catOf } from '../registry.js';
 import { COND_OPS, defaultCond } from '../blocks.js';
 import { store, ui, commit, nav } from '../store.js';
-import { allNodes, newBlock, newScript, scriptTitle, findBlock, walkBlocks, freshBlockClone, fnNames, lint, findNode } from '../model.js';
+import { allNodes, newBlock, newScript, scriptTitle, findBlock, walkBlocks, freshBlockClone, fnNames, lint, findNode, scriptsFor } from '../model.js';
+import { blockSupports, activeTargetId, activeTarget } from '../registry.js';
+import { ITEMS, BLOCKS, SOUNDS } from '../targets/minecraft/ids.js';
 import { components } from '../registry.js';
 import { promptText, menu, toast, confirmDlg } from '../ui-kit.js';
 import { L, getLang, isBi, tf } from '../i18n.js';
@@ -31,7 +33,8 @@ export function renderLogic(container, origin) {
   }
   root.className = 'view logic' + (ui.navOpen.left ? '' : ' hide-left') + (ui.navOpen.right ? '' : ' hide-right');
   const p = proj();
-  if (!p.scripts.some((s) => s.id === ui.selScript)) ui.selScript = p.scripts[0]?.id || null;
+  const mine = scriptsFor(p, activeTargetId(p));
+  if (!mine.some((s) => s.id === ui.selScript)) ui.selScript = mine[0]?.id || null;
   fillNames();
   renderLeft();
   renderWorkspace();
@@ -43,6 +46,14 @@ function fillNames() {
   els.names.textContent = '';
   [...p.variables.map((v) => v.name), ...allNodes(p).filter((x) => x.node.type !== 'page').map((x) => x.node.name), ...p.models.map((m) => m.name), 'item']
     .forEach((n) => els.names.append(h('option', { value: n })));
+  root.querySelectorAll('datalist[id^=dl-mc]').forEach((x) => x.remove());
+  if (activeTargetId(p) === 'minecraft') {
+    for (const [id, list] of [['dl-mc-items', ITEMS], ['dl-mc-blocks', BLOCKS], ['dl-mc-sounds', SOUNDS]]) {
+      const dl = h('datalist', { id });
+      list.forEach((n) => dl.append(h('option', { value: n })));
+      els.names.parentElement.append(dl);
+    }
+  }
 }
 
 // ---------------------------------------------------------------- problems
@@ -71,10 +82,12 @@ function renderLeft() {
   const probs = problems();
   L.append(h('div', { class: 'panel-title' }, 'Scripts', h('button', { class: 'btn small', onclick: (e) => newScriptMenu(e.currentTarget) }, '＋ New')));
   const tree = h('div', { class: 'scroll' });
-  for (const pg of p.pages) {
+  const tid = activeTargetId(p), flat = !activeTarget(p).views.includes('design');
+  const groups = flat ? [{ id: '_all', name: 'Logic' }] : p.pages;
+  for (const pg of groups) {
     const key = 'sp:' + pg.id, closed = ui.collapsed.has(key);
-    const ss = p.scripts.filter((s) => s.page === pg.id);
-    tree.append(h('button', { class: 'cat-head', onclick: () => { closed ? ui.collapsed.delete(key) : ui.collapsed.add(key); renderLeft(); } }, closed ? '▸ ' : '▾ ', tf('Page: {0}', pg.name), h('em', {}, ss.length)));
+    const ss = scriptsFor(p, tid).filter((s) => flat || s.page === pg.id);
+    tree.append(h('button', { class: 'cat-head', onclick: () => { closed ? ui.collapsed.delete(key) : ui.collapsed.add(key); renderLeft(); } }, closed ? '▸ ' : '▾ ', flat ? 'Logic' : tf('Page: {0}', pg.name), h('em', {}, ss.length)));
     if (!closed) ss.forEach((s) => {
       const n = probs.filter((x) => x.script === s.id).length;
       tree.append(h('div', { class: 'layer script-item' + (s.id === ui.selScript ? ' on' : ''), onclick: () => { ui.selScript = s.id; ui.selBlocks.clear(); renderLogic(root); } },
@@ -91,9 +104,11 @@ function renderLeft() {
 }
 
 function newScriptMenu(anchor) {
-  const hats = [...blocks.values()].filter((d) => d.kind === 'hat');
+  const hats = [...blocks.values()].filter((d) => d.kind === 'hat' && blockSupports(d, activeTargetId(proj())) && blockVisible(d));
   menu(anchor, hats.map((d) => ({ label: `${d.icon} ${blockTitle(d)}`, onClick: () => createScript(d.type) })));
 }
+
+const firstHat = () => [...blocks.values()].find((d) => d.kind === 'hat' && blockSupports(d, activeTargetId(proj())))?.type;
 
 function createScript(hatType) {
   const p = proj();
@@ -126,7 +141,7 @@ function renderWorkspace() {
   W.append(toolbar);
   if (!s) {
     W.append(h('div', { class: 'empty' }, h('p', {}, 'スクリプトがありません。'), h('p', { class: 'muted' }, '左の「＋ New」からイベントを選んで作成するか、Design の部品プロパティから Edit Logic を押してください。'),
-      h('button', { class: 'btn primary', onclick: () => createScript('onLoad') }, '＋ ページ表示時のスクリプトを作る')));
+      h('button', { class: 'btn primary', onclick: () => createScript(firstHat()) }, '＋ 最初のスクリプトを作る')));
     return;
   }
   const probMap = {};
@@ -288,7 +303,7 @@ let lastFocus = null;
 const sizeFor = (v, min = 3) => Math.max(min, Math.min(40, String(v ?? '').length + 1));
 
 function textInput(v, ph, onType, cls = 'f f-expr', list, onFocus) {
-  const i = h('input', { class: cls, value: v ?? '', placeholder: ph || '', size: sizeFor(v, ph ? Math.max(5, Math.min(ph.length + 1, 10)) : 3), spellcheck: 'false', list: list ? 'dl-names' : null });
+  const i = h('input', { class: cls, value: v ?? '', placeholder: ph || '', size: sizeFor(v, ph ? Math.max(5, Math.min(ph.length + 1, 10)) : 3), spellcheck: 'false', list: list ? (typeof list === 'string' ? list : 'dl-names') : null });
   i.addEventListener('input', () => { i.size = sizeFor(i.value); onType(i.value); });
   if (onFocus) i.addEventListener('focus', onFocus);
   return i;
@@ -352,7 +367,7 @@ function fieldEl(ctx, id, def, key, args, path) {
   const set = (val, typing) => setPath(ctx, id, vpath, val, typing);
   switch (f.t) {
     case 'expr': return exprSlot(ctx, id, vpath, v, f.ph);
-    case 'text': return textInput(v, f.ph, (x) => set(x, true), 'f');
+    case 'text': return textInput(v, f.ph, (x) => set(x, true), 'f', f.list);
     case 'ident': return textInput(v, f.ph, (x) => set(sanitizeIdent(x), true), 'f f-expr');
     case 'comp': {
       const opts = allNodes(p).filter((x) => x.node.type !== 'page' && (!f.types || f.types.includes(x.node.type))).map((x) => [x.node.id, `${x.node.name} (${x.node.type})`]);
@@ -535,10 +550,11 @@ function fillBlocks() {
   const fns = fnNames(proj());
   const match = (x, cat) => !q || (x.title + (x.d.en || '') + x.d.title + cat.label + cat.ja + x.d.type).toLowerCase().includes(q);
   for (const cat of BLOCK_CATS) {
-    const all = [...blocks.values()].filter((d) => d.cat === cat.id && blockVisible(d));
+    const tid = activeTargetId(proj());
+    const all = [...blocks.values()].filter((d) => d.cat === cat.id && blockVisible(d) && (blockSupports(d, tid) || blockSupports(d, tid, true)));
     let cmds = palMode === 'rep' ? [] : all.filter((d) => d.kind !== 'reporter').map((d) => ({ d, title: blockTitle(d), make: () => ({ type: d.type }) }));
     if (cat.id === 'Control' && palMode !== 'rep') fns.forEach((n) => cmds.push({ d: blocks.get('call_fn'), title: tf('ƒ {0} を実行', n), make: () => ({ type: 'call_fn', args: { name: n } }) }));
-    const reps = palMode === 'cmd' ? [] : all.filter(repCapable).map((d) => ({ d, title: blockTitle(d), make: () => ({ type: d.type }) }));
+    const reps = palMode === 'cmd' ? [] : all.filter((d) => repCapable(d) && blockSupports(d, activeTargetId(proj()), true)).map((d) => ({ d, title: blockTitle(d), make: () => ({ type: d.type }) }));
     const rc = cmds.filter((x) => match(x, cat)), rr = reps.filter((x) => match(x, cat));
     if (!rc.length && !rr.length) continue;
     const key = 'bpal:' + cat.id, closed = ui.collapsed.has(key) && !q;

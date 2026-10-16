@@ -7,12 +7,14 @@ import './blocks-extra.js';
 import './blocks-reporters.js';
 import './blocks-game.js';
 import './blocks-more.js';
+import './targets/web.js';
+import './targets/minecraft/index.js';
 import { fontStack, googleFontsUrl } from './fonts.js';
 import { animationRules, keyframesCss } from './animations.js';
 import { drawChart } from './chartdraw.js';
 import { osmUrl } from './maputil.js';
 import { BASE_CSS, cssDecls, renderNode } from './components.js';
-import { allNodes, walk, defaultFor, nextRowId } from './model.js';
+import { allNodes, walk, defaultFor, nextRowId, scriptsFor } from './model.js';
 import { esc } from './util.js';
 
 const GLOBALS = new Set(['Math', 'Number', 'String', 'Boolean', 'Date', 'JSON', 'Array', 'Object', 'parseInt', 'parseFloat',
@@ -224,7 +226,7 @@ function genJs(project, debug, persist) {
   const vars = Object.fromEntries(project.variables.map((v) => [v.name, typedVar(v)]));
   // 1) logic first, so we know which optional runtime modules are needed
   const logic = [];
-  for (const s of project.scripts) {
+  for (const s of scriptsFor(project, 'web')) {
     const def = blocks.get(s.hat.type);
     if (!def) continue;
     logic.push('', `// ▶ ${s.name || (def.summary ? def.summary(s.hat.args, project) : def.title)}`);

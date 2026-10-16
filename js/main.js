@@ -5,10 +5,13 @@ import './blocks-extra.js';
 import './blocks-reporters.js';
 import './blocks-game.js';
 import './blocks-more.js';
+import './targets/web.js';
+import './targets/minecraft/index.js';
 import { h, download, isTypingTarget, fmtDate } from './util.js';
-import { store, ui, subscribe, emit, undo, redo, jumpTo, saveNow, nav, saveAs, newProject, listProjects, openProject } from './store.js';
+import { store, ui, subscribe, emit, undo, redo, jumpTo, saveNow, nav, saveAs, newProject, listProjects, openProject, setActiveTarget, commit } from './store.js';
+import { targets, activeTarget, activeTargetId } from './registry.js';
 import { lint } from './model.js';
-import { menu, toast, dialog, promptText } from './ui-kit.js';
+import { menu, toast, dialog, promptText, confirmDlg } from './ui-kit.js';
 import { renderStart, newDialog, importFile } from './views/start.js';
 import { renderDesign, designKey } from './views/design.js';
 import { renderData } from './views/data.js';
@@ -16,7 +19,8 @@ import { renderLogic, logicKey } from './views/logic.js';
 import { renderPreview, run as runPreview } from './views/preview.js';
 import { openExport } from './export.js';
 import { matchAction } from './shortcuts.js';
-import { openShortcuts, openPlugins } from './views/prefs.js';
+import { openShortcuts, openPlugins, openTargetSettings } from './views/prefs.js';
+import { renderOutput } from './views/output.js';
 import { loadInstalledPlugins } from './plugins.js';
 import { LANGS, getLang, setLang, tf, t, L } from './i18n.js';
 import './i18n-dict.js';
@@ -24,7 +28,10 @@ import { fontSelect, colorField } from './views/fontpicker.js';
 
 const topbar = document.getElementById('topbar');
 const main = document.getElementById('main');
-const VIEWS = ['design', 'data', 'logic', 'preview'];
+const ALL_VIEWS = ['design', 'data', 'logic', 'preview', 'output'];
+/** views the active target offers (Web: design/data/logic/preview, Minecraft: data/logic/output) */
+const viewsOf = () => (store.project ? activeTarget(store.project)?.views : null) || ['design', 'data', 'logic', 'preview'];
+const viewLabel = (v) => ({ design: 'Design', data: 'Data', logic: 'Logic', preview: 'Preview', output: 'Output' }[v]);
 let viewRoot = null;
 
 // ---------- theme ----------
@@ -50,15 +57,19 @@ function draw(origin) {
   else if (ui.view === 'data') renderData(viewRoot, origin);
   else if (ui.view === 'logic') renderLogic(viewRoot, origin);
   else if (ui.view === 'preview' && !origin) renderPreview(viewRoot);
+  else if (ui.view === 'output') renderOutput(viewRoot);
 }
 
 nav.go = (view) => {
   if (view !== 'start' && !store.project) view = 'start';
+  if (view !== 'start' && !viewsOf().includes(view)) view = view === 'preview' ? 'output' : viewsOf().includes('logic') ? 'logic' : viewsOf()[0];
   ui.view = view;
   mount();
   renderTopbar();
 };
-nav.run = () => { if (ui.view === 'preview') runPreview(); else nav.go('preview'); };
+nav.run = () => {
+  if (viewsOf().includes('preview')) { if (ui.view === 'preview') runPreview(); else nav.go('preview'); } else nav.go('output');
+};
 nav.undo = () => doUndo();
 
 const histLabel = (l) => { const m = /^(Add|Edit|Delete|Insert|Rename|Create|Duplicate) (.+)$/.exec(l); return m ? t(m[1] + ' ') + t(m[2]) : t(l); };
@@ -100,13 +111,28 @@ function renderTopbar() {
     h('button', { class: 'icon-btn', title: 'Undo (Ctrl+Z)', disabled: !store.undoStack.length, onclick: doUndo }, '↶'),
     h('button', { class: 'icon-btn', title: 'Redo (Ctrl+Y)', disabled: !store.redoStack.length, onclick: doRedo }, '↷'),
     h('button', { class: 'icon-btn', title: '履歴 History', onclick: (e) => historyMenu(e.currentTarget) }, '🕘'),
-    h('nav', { class: 'nav', role: 'tablist' }, VIEWS.map((v) => h('button', { class: 'nav-tab' + (ui.view === v ? ' on' : ''), role: 'tab', 'aria-selected': ui.view === v, onclick: () => nav.go(v) },
-      v[0].toUpperCase() + v.slice(1), v === 'logic' && probs ? h('b', { class: 'warn', title: tf('{0} 件の問題', probs) }, ' ⚠' + probs) : null))),
+    targetChip(),
+    h('nav', { class: 'nav', role: 'tablist' }, viewsOf().map((v) => h('button', { class: 'nav-tab' + (ui.view === v ? ' on' : ''), role: 'tab', 'aria-selected': ui.view === v, onclick: () => nav.go(v) },
+      viewLabel(v), v === 'logic' && probs ? h('b', { class: 'warn', title: tf('{0} 件の問題', probs) }, ' ⚠' + probs) : null))),
     h('span', { class: 'sp' }),
-    h('button', { class: 'btn run', title: 'Run (F5)', onclick: () => nav.run() }, '▶ Run'),
+    h('button', { class: 'btn run', title: 'Run (F5)', onclick: () => nav.run() }, viewsOf().includes('preview') ? '▶ Run' : '▶ Output'),
     h('button', { class: 'btn', title: 'Export', onclick: () => { saveNow(); openExport(store.project); } }, '⬇ Export'),
     ...toolBtns(), langBtn(), themeBtn());
   updateStatus();
+}
+
+function targetChip() {
+  const p = store.project, t = activeTarget(p);
+  return h('button', { class: 'btn small target-chip', title: 'Target — 生成する実行環境', onclick: (e) => {
+    const others = [...targets.values()].filter((x) => !p.targets.some((c) => c.type === x.id));
+    menu(e.currentTarget, [
+      ...p.targets.map((c) => { const d = targets.get(c.type); return { label: (c.type === activeTargetId(p) ? '✓ ' : '　') + d.icon + ' ' + L(d.name), onClick: () => { setActiveTarget(c.type); nav.go(viewsOf().includes(ui.view) ? ui.view : 'logic'); renderTopbar(); } }; }),
+      { sep: true },
+      ...(t.configFields.length ? [{ label: 'Target Settings…', onClick: () => openTargetSettings(t.id, { onDone: () => nav.go(ui.view) }) }] : []),
+      ...others.map((d) => ({ label: tf('＋ {0} を追加…', d.icon + ' ' + L(d.name)), onClick: async () => { if (await openTargetSettings(d.id, { isNew: true })) { setActiveTarget(d.id); nav.go('logic'); } } })),
+      ...(p.targets.length > 1 ? [{ label: 'このターゲットを削除', onClick: async () => { if (await confirmDlg('ターゲットを削除', tf('{0} の設定を削除します(ロジックは残ります / Undoで戻せます)。', L(t.name)), '削除')) { const id = t.id; commit('Remove target', (pp) => { pp.targets = pp.targets.filter((x) => x.type !== id); }); setActiveTarget(p.targets[0].type); nav.go('logic'); } } }] : []),
+    ]);
+  } }, t.icon, h('span', {}, L(t.name)), h('small', {}, '▾'));
 }
 
 const toolBtns = () => [
@@ -142,6 +168,7 @@ function projectMenu(anchor) {
 
 async function settings() {
   const p = store.project;
+  if (activeTargetId(p) !== 'web') { openTargetSettings(activeTargetId(p), { onDone: () => nav.go(ui.view) }); return; }
   const st = { ...(p.settings || {}) };
   const name = h('input', { class: 'inp', value: p.name }), title = h('input', { class: 'inp', value: st.title || p.name });
   const desc = h('input', { class: 'inp', value: st.description || '' }), fav = h('input', { class: 'inp', value: st.favicon || '', placeholder: '🎮' });
@@ -180,7 +207,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (isTypingTarget(e.target) || document.querySelector('.overlay')) return;
   if (!store.project || ui.view === 'start') return;
-  for (const v of VIEWS) if (matchAction(e, v)) { e.preventDefault(); nav.go(v); return; }
+  for (const v of ['design', 'data', 'logic', 'preview']) if (matchAction(e, v)) { e.preventDefault(); nav.go(v); return; }
   if (matchAction(e, 'redo')) { e.preventDefault(); doRedo(); return; }
   if (matchAction(e, 'undo')) { e.preventDefault(); doUndo(); return; }
   let handled = false;

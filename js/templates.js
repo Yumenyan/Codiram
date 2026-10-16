@@ -1,5 +1,6 @@
 // Project templates. New ones can be appended here (or registered by plugins later).
 import { emptyProject, createNode, newScript, newBlock, newModel } from './model.js';
+import { defaultMcConfig } from './targets/minecraft/index.js';
 
 const add = (p, parent, type, props = {}, style = {}) => {
   const n = createNode(p, type);
@@ -376,6 +377,39 @@ export const TEMPLATES = [
       const sc = newScript(p, 'main', 'onChange', { target: sel.id }); sc.name = '場所が選ばれた';
       sc.body.push(blk('map_set', { t: map.id, lat: find('lat'), lon: find('lon'), z: '14' }));
       p.scripts.push(sc);
+      return p;
+    },
+  },
+  {
+    id: 'mc_hello', target: 'minecraft', name: 'Hello Minecraft', desc: 'プレイヤーが参加したらメッセージを表示(最初の成功ルート)',
+    build(opts = {}) {
+      const p = emptyProject(opts.modName || 'Hello Mod', { ...defaultMcConfig(opts.modId, opts.modName), ...(opts.config || {}) });
+      const s = newScript(p, 'main', 'mc_on_join', {}); s.name = 'プレイヤー参加時';
+      s.body.push(blk('mc_send_message', { to: 'player', text: '"Hello Minecraft!"' }));
+      p.scripts.push(s);
+      return p;
+    },
+  },
+  {
+    id: 'mc_kit', target: 'minecraft', name: 'Welcome Kit', desc: '参加メッセージ+パン配布 / スニーク右クリックでジャンプ台 / ダイヤ鉱石を壊すと報酬',
+    build(opts = {}) {
+      const p = emptyProject(opts.modName || 'Welcome Kit', { ...defaultMcConfig(opts.modId || 'welcome_kit', opts.modName || 'Welcome Kit'), ...(opts.config || {}) });
+      p.variables.push({ name: 'visitors', type: 'Number', initial: '0' }, { name: 'bonus', type: 'String', initial: 'ダイヤ発見!' });
+      const join = newScript(p, 'main', 'mc_on_join', {}); join.name = '参加時';
+      join.body.push(
+        blk('change_var', { name: 'visitors', by: '1' }),
+        blk('mc_send_message', { to: 'player', text: '"ようこそ " + ' + 'visitors' + ' + " 人目のプレイヤーさん!"' }),
+        blk('mc_give_item', { item: 'minecraft:bread', count: '5' }),
+        blk('mc_play_sound', { sound: 'minecraft:entity.player.levelup', volume: '1', pitch: '1' }),
+        blk('wait', { ms: '3000' }),
+        blk('mc_send_message', { to: 'player', text: '"ゆっくりしていってね!"' }));
+      const use = newScript(p, 'main', 'mc_on_item_use', {}); use.name = '右クリック(アイテム使用)';
+      use.body.push(blk('if', { cond: { rows: [{ l: rep('b_mc_sneaking', {}), op: 'true', r: '' }, { l: rep('r_mc_held_item', {}), op: '==', r: '"minecraft:stick"' }], join: 'and', not: false } }, {
+        then: [blk('mc_teleport', { mode: 'relative', x: '0', y: '10', z: '0' }), blk('mc_play_sound', { sound: 'minecraft:entity.firework_rocket.launch', volume: '1', pitch: '1' })], else: [] }));
+      const brk = newScript(p, 'main', 'mc_on_block_break', {}); brk.name = 'ブロックを壊した';
+      brk.body.push(blk('if', { cond: cond(rep('r_mc_block_id', {}), '==', '"minecraft:diamond_ore"') }, {
+        then: [blk('mc_send_message', { to: 'all', text: rep('text_join', { a: rep('r_mc_player_name', {}), b: '" が " + bonus', c: '' }) }), blk('mc_give_item', { item: 'minecraft:diamond', count: '2' })], else: [] }));
+      p.scripts.push(join, use, brk);
       return p;
     },
   },

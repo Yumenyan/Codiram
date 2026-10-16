@@ -16,6 +16,30 @@ python3 -m http.server 8000   # または任意の静的サーバ
 
 (ES Modules を使うため `file://` ではなく HTTP サーバ経由で開いてください。)
 
+## ターゲット(Web / Minecraft Mod)
+
+Codiram は **Target** を選んで、同じビジュアルなロジックから別の実行環境向けの成果物を生成します。設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照。
+
+| Target | 生成物 | 画面 |
+| --- | --- | --- |
+| 🌐 Web アプリ | HTML / CSS / JavaScript(従来どおり) | Design / Data / Logic / Preview |
+| ⛏ Minecraft Mod (Modiram) | **Fabric 1.19.2 の Java プロジェクト**(`gradle build` で .jar) | Data(変数) / Logic / Output(生成コードを常時表示) |
+
+* New Project でターゲットを選択 → 「Minecraft Mod」なら Mod 名と Mod ID を入力
+* トップバーのターゲット表示から、切り替え・設定・**ターゲットの追加**(1プロジェクトに複数ターゲット)ができます
+* ブロックは `targets` を持ち、現在のターゲットで使えるものだけがパレットに表示されます(変数・IF・繰り返し・関数などの共通ブロックは Web と Minecraft で共用)
+* 既存(v1)のプロジェクトは Web プロジェクトとして、そのまま開けます
+
+### Minecraft Mod を作る(最初の成功ルート)
+
+1. New Project → **Minecraft Mod** → テンプレート *Hello Minecraft*(Mod ID を入力)
+2. Logic: 「プレイヤーが参加したとき」→「メッセージを送る "Hello Minecraft!"」
+3. Output で生成された Java を確認 → **Export** で ZIP を書き出し
+4. 展開して `gradle wrapper --gradle-version 7.6.4` → `./gradlew build` → `build/libs/*.jar` を Fabric 1.19.2 の `mods` フォルダへ
+
+対応ブロック(MVP): イベント(参加・ブロック右クリック/破壊/設置・アイテム使用)、アクション(メッセージ・アイテムを与える/取り上げる・ブロックを置く・テレポート・音)、条件(アイテム所持・スニーク)、値(プレイヤー名/座標・手持ち・イベントのブロック)、共通(変数・IF・繰り返し・待つ・関数・比較)。
+実機ビルド・起動の確認状況と既知の制約は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#4-minecraft--modiram-mvpphase-2) にあります。
+
 ## 画面
 
 | 画面 | 内容 |
@@ -85,7 +109,7 @@ Scratch の「丸い値ブロック」「六角形の条件ブロック」と同
 ## テスト
 
 ```bash
-npm test   # 全ブロック種別が有効な JavaScript を生成することを確認
+npm test   # 全ブロック・全テンプレートの生成、Minecraft の Java を javac で型チェック(API スタブ)
 ```
 
 ## MVP の動作確認
@@ -98,7 +122,10 @@ npm test   # 全ブロック種別が有効な JavaScript を生成すること�
 ```
 index.html            エントリ
 css/app.css           IDE テーマ(ライト/ダーク)
-js/main.js            トップバー・ビュー切替・ショートカット
+js/main.js            トップバー・ビュー切替・ショートカット・ターゲット切替
+js/ir.js              IR(式パーサ・型推論・ブロック→IR)
+js/targets/web.js     Web ターゲット(既存 Generator のラッパー)
+js/targets/minecraft/ Minecraft ターゲット(blocks / java / project / index)
 js/store.js           プロジェクト状態 / Undo-Redo / 自動保存 / My Components
 js/model.js           プロジェクトのデータ構造とヘルパ、静的チェック(Problems)
 js/registry.js        components / blocks / exporters のレジストリ + registerPlugin()

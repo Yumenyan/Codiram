@@ -1,7 +1,7 @@
 // Project data model + helpers. A project is plain JSON:
 // { pages:[{id,name,root:Node}], models:[{id,name,fields,rows}], variables:[], scripts:[] }
 import { uid, clone, sanitizeIdent } from './util.js';
-import { components, blocks } from './registry.js';
+import { components, blocks, blockSupports, targets, activeTargetId } from './registry.js';
 import { tf, t as tt } from './i18n.js';
 
 export const FIELD_TYPES = ['String', 'Number', 'Boolean', 'Date', 'Array', 'Object', 'Enum', 'Relation'];
@@ -15,9 +15,12 @@ export function newPage(name, id) {
   };
 }
 
-export function emptyProject(name = 'Untitled Project') {
+/** Project format version. 1 = Web only (no targets), 2 = targets[] + activeTarget. */
+export const PROJECT_VERSION = 2;
+
+export function emptyProject(name = 'Untitled Project', targetCfg = { type: 'web' }) {
   return {
-    v: 1, id: uid('p'), name, created: Date.now(), updated: Date.now(),
+    v: 1, version: PROJECT_VERSION, targets: [targetCfg], activeTarget: targetCfg.type, id: uid('p'), name, created: Date.now(), updated: Date.now(),
     settings: { title: name },
     pages: [newPage('Main', 'main')],
     models: [], variables: [], scripts: [], assets: [],
@@ -26,6 +29,9 @@ export function emptyProject(name = 'Untitled Project') {
 
 /** Fill in fields added in later versions so old saved projects keep working. */
 export function normalizeProject(p) {
+  if (!p.targets || !p.targets.length) p.targets = [{ type: 'web' }]; // version-1 projects are Web projects
+  if (!p.activeTarget || !p.targets.some((t) => t.type === p.activeTarget)) p.activeTarget = p.targets[0].type;
+  p.version = PROJECT_VERSION;
   p.assets = p.assets || [];
   p.settings = p.settings || {};
   p.variables = p.variables || [];
@@ -188,8 +194,17 @@ export const fnNames = (project) =>
   project.scripts.filter((s) => s.hat.type === 'onFunction' && s.hat.args.name).map((s) => s.hat.args.name);
 
 // ---------- static checks ("Problems") ----------
+export const targetConfig = (project, type) => project.targets.find((t) => t.type === type);
+
+/** Scripts that belong to a target (their event/hat block is supported by it). */
+export function scriptsFor(project, targetId) {
+  return project.scripts.filter((s) => blockSupports(blocks.get(s.hat.type), targetId));
+}
+
 export function lint(project) {
   const problems = [];
+  const tid = activeTargetId(project);
+  const tdef = targets.get(tid);
   const nodes = new Map(allNodes(project).map(({ node }) => [node.id, node]));
   const models = new Set(project.models.map((m) => m.name));
   const vars = new Set(project.variables.map((v) => v.name));
@@ -198,6 +213,7 @@ export function lint(project) {
   const check = (b, script, nested) => {
     const def = blocks.get(b.type);
     if (!def) { problems.push({ script: script.id, block: b.id, msg: tf('不明なブロック: {0}', b.type) }); return; }
+    if (!blockSupports(def, tid, nested)) problems.push({ script: script.id, block: b.id, msg: tf('このブロックは {0} では使えません', tdef ? tt(tdef.name.ja) : tid) });
     for (const [k, f] of Object.entries(def.fields || {})) {
       if (nested && k === 'to') continue; // value blocks have no result variable
       const v = b.args[k];
@@ -222,10 +238,11 @@ export function lint(project) {
     Object.values(v).forEach((x) => deep(x, owner, script));
   };
   const check0 = check;
-  for (const s of project.scripts) {
+  for (const s of scriptsFor(project, tid)) {
     check({ id: 'hat:' + s.id, type: s.hat.type, args: s.hat.args }, s);
     deep(s.hat.args, 'hat:' + s.id, s);
     walkBlocks(s.body, (b) => { check(b, s); deep(b.args, b.id, s); });
   }
+  if (tdef?.lint) problems.push(...tdef.lint(project));
   return problems;
 }

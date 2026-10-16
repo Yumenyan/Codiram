@@ -6,6 +6,7 @@ import { FIELD_TYPES, VAR_TYPES, newModel, nextRowId, defaultFor, walkBlocks, al
 import { dialog, confirmDlg, toast } from '../ui-kit.js';
 import { tf } from '../i18n.js';
 import { download } from '../util.js';
+import { activeTarget } from '../registry.js';
 
 const proj = () => store.project;
 let root;
@@ -30,7 +31,8 @@ export function renderData(container, origin) {
       h('div', { class: 'panel-title' }, 'Assets'),
       h('div', { class: 'layer' + (ui.selModel === '__assets' ? ' on' : ''), onclick: () => { ui.selModel = '__assets'; renderData(root); } },
         h('span', { class: 'pal-ico' }, '🗂'), h('span', {}, 'Images & audio'), h('em', {}, (p.assets || []).length + ''))));
-  const main = h('section', { class: 'center scroll data-main' }, ui.selModel === '__vars' ? varsEditor() : ui.selModel === '__assets' ? assetsEditor() : modelEditor(p.models.find((m) => m.id === ui.selModel)));
+  const noUi = !activeTarget(p).views.includes('design');
+  const main = h('section', { class: 'center scroll data-main' }, noUi ? h('div', { class: 'notice' }, 'このターゲットでは「変数」のみ使えます(データモデル・アセットは Web ターゲット向けです)。') : null, ui.selModel === '__vars' ? varsEditor() : ui.selModel === '__assets' ? assetsEditor() : modelEditor(p.models.find((m) => m.id === ui.selModel)));
   root.append(left, main);
 }
 
