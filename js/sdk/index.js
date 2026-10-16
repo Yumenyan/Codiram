@@ -15,6 +15,7 @@
 import { GeneratorRegistry, targets, hooks } from '../registry.js';
 import { targetConfig } from '../model.js';
 import { missingCapabilities } from './features.js';
+import { ADDONS } from './addons.js';
 import { tf } from '../i18n.js';
 import { validateBlocks } from './validate.js';
 import { CAPABILITIES } from './capabilities.js';
@@ -25,6 +26,7 @@ export { usedCapabilities, missingCapabilities } from './features.js';
 export { defineProjectTemplate, renderProjectTemplate, ProjectTemplates } from './template.js';
 export { defineMapping } from './mapping.js';
 export { verifyGenerated } from './verify.js';
+export { ADDONS, workflowFor } from './addons.js';
 export * as emit from './emit.js';
 // The Common Semantic Model is the IR of js/ir.js (blocks -> operations); generators with engine 'ir' build on it.
 export { buildIR as buildSemanticModel, parseExpr, irType } from '../ir.js';
@@ -62,14 +64,16 @@ export const manifestOf = (gen) => ({ id: gen.id, name: gen.name.en, version: ge
  * validate -> generate. Result = GeneratedProject: { files, problems, root, entry, generator }
  *  files: { path: string | Uint8Array }   root: folder name for the ZIP   entry: file to show first
  */
-export function runGenerator(project, genId) {
+export function runGenerator(project, genId, { addons = [] } = {}) {
   const gen = targets.get(genId);
   if (!gen) throw new Error('Unknown generator: ' + genId);
   const cfg = targetConfig(project, genId) || gen.defaultConfig(project.name, project.name);
   const pre = gen.validate(project).problems;
   const res = gen.generate(project, cfg);
+  const files = { ...res.files };
+  for (const id of addons) ADDONS.get(id)?.apply(files, { gen, project });
   return {
-    files: res.files, root: res.root || null, entry: res.entry || null, ir: res.ir,
+    files, root: res.root || null, entry: res.entry || null, ir: res.ir,
     problems: [...pre, ...(res.problems || []).filter((p) => !(p.unsupported && pre.some((q) => q.unsupported)))],
     generator: manifestOf(gen),
   };

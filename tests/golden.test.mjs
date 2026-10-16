@@ -9,7 +9,7 @@ import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import '../js/generator.js';
-import { GeneratorRegistry, runGenerator, verifyGenerated } from '../js/sdk/index.js';
+import { GeneratorRegistry, runGenerator, verifyGenerated, ADDONS } from '../js/sdk/index.js';
 import { GOLDEN } from './golden/projects.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,7 @@ const has = (tool) => { try { execFileSync(tool, ['--version'], { stdio: 'ignore
 
 let built = 0, checked = 0;
 for (const g of GOLDEN) {
-  for (const [genId, make] of g.generators) {
+  for (const [genId, make, expectedOut] of g.generators) {
     const gen = GeneratorRegistry.get(genId);
     const project = make();
     const v = gen.validate(project);
@@ -33,6 +33,16 @@ for (const g of GOLDEN) {
     next[key] = Object.keys(res.files).sort();
     if (snaps[key] && !process.env.UPDATE_SNAPSHOTS) assert.deepEqual(next[key], snaps[key], `${key}: generated file list changed (UPDATE_SNAPSHOTS=1 to accept)`);
     checked++;
+    // add-on: every generator that can have a workflow gets valid YAML
+    if (ADDONS.get('github-actions').applies(gen)) {
+      const withCi = runGenerator(project, genId, { addons: ['github-actions'] }).files;
+      const wf = Object.keys(withCi).find((n) => n.startsWith('.github/workflows/'));
+      assert.ok(wf, `${key}: workflow`);
+      if (has('python3')) {
+        try { execFileSync('python3', ['-c', 'import sys, yaml; d = yaml.safe_load(sys.stdin.read()); assert "jobs" in d and ("on" in d or True)'], { input: withCi[wf], stdio: ['pipe', 'pipe', 'pipe'] }); }
+        catch (e) { if (!/No module named/.test(String(e.stderr))) assert.fail(`${key}: ${wf} is not valid YAML: ${e.stderr}`); }
+      }
+    }
     const b = gen.verify.build;
     if (b && !b.optional && has(b.tool)) {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codiram-golden-'));
@@ -42,11 +52,12 @@ for (const g of GOLDEN) {
       built++;
     }
     const r = gen.verify.run;
-    if (r && g.stdout != null && has(r.tool)) {
+    const wanted = expectedOut ?? g.stdout;
+    if (r && wanted != null && has(r.tool)) {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codiram-golden-'));
       for (const [n, c] of Object.entries(res.files)) { fs.mkdirSync(path.dirname(path.join(dir, n)), { recursive: true }); fs.writeFileSync(path.join(dir, n), c); }
       const env = { ...process.env, CARGO_TARGET_DIR: path.join(os.tmpdir(), 'codiram-rust-target') };
-      assert.equal(execFileSync(r.tool, r.args, { cwd: dir, env, encoding: 'utf8' }), g.stdout, `${key}: program output`);
+      assert.equal(execFileSync(r.tool, r.args, { cwd: dir, env, encoding: 'utf8' }), wanted, `${key}: program output`);
       built++;
     }
   }

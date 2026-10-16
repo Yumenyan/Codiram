@@ -52,9 +52,33 @@ export function botGolden() {
   return p;
 }
 
-/** which generators each golden project is for */
+export function dataGolden(targetCfg) {
+  const p = emptyProject('Golden Data', targetCfg);
+  const users = newModel(p, 'Users'); users.fields = [{ name: 'id', type: 'Number' }, { name: 'name', type: 'String' }];
+  users.rows = [{ _id: 1, id: 1, name: "O'Brien" }];
+  const items = newModel(p, 'Items'); items.fields = [{ name: 'id', type: 'Number' }, { name: 'title', type: 'String' }, { name: 'price', type: 'Number' }, { name: 'done', type: 'Boolean' },
+    { name: 'kind', type: 'Enum', options: 'a, b' }, { name: 'owner', type: 'Relation', ref: 'Users' }];
+  items.rows = [{ _id: 1, id: 1, title: 'one', price: 1.5, done: true, kind: 'a', owner: 1 }, { _id: 2, id: 2, title: 'two', price: 2, done: false, kind: 'b', owner: 1 }];
+  p.models.push(items, users); // Items refers to Users: tables must still be created Users-first
+  return p;
+}
+
+export function osGolden() {
+  const p = emptyProject('Golden OS', { type: 'os-bootloader' });
+  const s = newScript(p, 'main', 'cli_main', {});
+  s.body.push(blk('note', { text: 'boot message' }), blk('cli_print', { value: '"Hello from Codiram"', nl: '1' }), blk('wait', { ms: '500' }), blk('cli_print', { value: rep('text_join', { a: '"Bye"', b: '"!"', c: '' }), nl: '0' }), blk('cli_exit', { code: '0' }));
+  p.scripts.push(s);
+  return p;
+}
+
+/** which generators each golden project is for (entry: [generator id, make project, expected program output?]) */
 export const GOLDEN = [
   { id: 'web-golden', generators: [['web', () => webGolden()], ['vite-web', () => webGolden({ type: 'vite-web', version: '0.1.0' })], ['static-web', () => webGolden({ type: 'static-web', version: '0.1.0' })], ['html-css', () => webGolden({ type: 'html-css', version: '0.1.0' })], ['desktop', () => webGolden({ type: 'desktop', appName: 'Golden', identifier: 'com.example.golden', version: '1.0.0', width: 800, height: 600 })]] },
+  { id: 'data-golden', generators: [
+    ['sql', () => dataGolden({ type: 'sql', dialect: 'sqlite' })], ['sqlite', () => dataGolden({ type: 'sqlite' }), 'items 2\nusers 1\n'],
+    ['data-pipeline', () => dataGolden({ type: 'data-pipeline' }), 'users: 1 rows\nitems: 2 rows\n'],
+    ['rest-api', () => dataGolden({ type: 'rest-api' }), 'ok\n'], ['node-server', () => dataGolden({ type: 'node-server' }), 'ok\n']] },
+  { id: 'os-golden', generators: [['os-bootloader', () => osGolden()]] },
   { id: 'bot-golden', generators: [['discord-bot', () => botGolden()]] },
   { id: 'cli-golden', generators: [['rust-cli', () => cliGolden().project], ['python', () => cliGolden({ type: 'python', version: '0.1.0' }).project],
     ['nodejs', () => cliGolden({ type: 'nodejs', version: '0.1.0' }).project], ['javascript', () => cliGolden({ type: 'javascript', version: '0.1.0' }).project],
