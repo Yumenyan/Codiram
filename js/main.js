@@ -177,12 +177,13 @@ async function settings() {
   const drawFont = () => { fontHolder.textContent = ''; fontHolder.append(fontSelect(st.font || '', (v) => { st.font = v; drawFont(); })); };
   drawFont();
   const langSel = h('select', { class: 'sel', onchange: (e) => { st.appLang = e.target.value; } }, LANGS.map((l) => h('option', { value: l.id, selected: l.id === (st.appLang || 'ja') }, l.label)));
+  const cmSel = h('select', { class: 'sel', onchange: (e) => { st.commentLang = e.target.value; } }, [['auto', '自動(表示言語に合わせる)'], ['ja', '日本語'], ['en', 'English']].map(([v, l]) => h('option', { value: v, selected: (st.commentLang || 'auto') === v }, l)));
   const css = h('textarea', { class: 'inp mono', rows: 5, placeholder: '/* 例: .cx-button { letter-spacing: 1px } */' }); css.value = st.customCss || '';
   const js = h('textarea', { class: 'inp mono', rows: 5, placeholder: '// 例: document.title = "Hello";  (vars / data / setVar() が使えます)' }); js.value = st.customJs || '';
   const sec = (title, open, ...kids) => h('details', { class: 'pgroup', open }, h('summary', {}, title), h('div', { class: 'form', style: { padding: '8px 4px 12px' } }, kids));
   const ok = await dialog({ title: 'Project Settings', wide: true, body: h('div', {},
     sec('General', true, h('label', {}, 'プロジェクト名', name), h('label', {}, 'アプリのタイトル (HTML <title>)', title), h('label', {}, 'アプリの説明 (meta description)', desc),
-      h('label', {}, 'ファビコン(絵文字1文字)', fav), h('label', {}, '完成アプリの言語 (<html lang>)', langSel)),
+      h('label', {}, 'ファビコン(絵文字1文字)', fav), h('label', {}, '完成アプリの言語 (<html lang>)', langSel), h('label', {}, '生成コードのコメントの言語', cmSel)),
     sec('Appearance', true, h('label', {}, 'アプリ全体のフォント (Google Fonts / 内蔵フォント)', fontHolder),
       h('label', {}, '背景色', colorField(st.bg, (v) => { st.bg = v; })), h('label', {}, '文字色', colorField(st.textColor, (v) => { st.textColor = v; })),
       h('label', {}, 'メインカラー(ボタン・タブ)', colorField(st.primary, (v) => { st.primary = v; }))),

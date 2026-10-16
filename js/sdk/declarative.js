@@ -12,6 +12,7 @@
 import { defineGenerator, defineProjectTemplate, renderProjectTemplate, buildSemanticModel, irType, emit } from './index.js';
 import { CAPABILITIES } from './capabilities.js';
 import { normalizeDefinition } from './definition.js';
+import { cm, noteFor } from '../comments.js';
 import { GeneratorRegistry, hooks } from '../registry.js';
 import { targetConfig } from '../model.js';
 import { J } from '../i18n-helpers.js';
@@ -161,21 +162,29 @@ export function emitProgram(ir, spec, project, hooks = {}) {
     out.push(...lines);
     return [fill(open, { params }), ...out, ...(bracy ? [R.close] : []), ''];
   };
+  const t = cm(project);
+  const note = (text) => (R.comment ? fill(R.comment, { text }) : null); // comments in the project's comment language
   const functions = [];
   for (const f of ir.functions) {
     const info = fns.get(f.fnName);
+    const c = note(t(`関数「${f.fnName}」${f.params.length ? '(引数: ' + f.params.join(', ') + ')' : ''}`, `Function "${f.fnName}"${f.params.length ? ' (parameters: ' + f.params.join(', ') + ')' : ''}`));
+    if (c) functions.push(c);
     functions.push(...block(R.fnOpen.replace('{name}', info.id), f.body, f.params.map((q2) => emit.snakeCase(q2) || 'arg').join(', ')));
   }
   const handlers = ir.handlers.filter((h) => h.kind === 'main').map((h) => ({ h, id: handlerName(/^[ -~]+$/.test(h.name || '') ? h.name : 'on_start', 'on_start') }));
-  for (const { h, id } of handlers) functions.push(...block(R.fnOpen.replace('{name}', id), h.body));
+  for (const { h, id } of handlers) {
+    const c = note(t(`スクリプト「${h.name || id}」(プログラム開始時に実行)`, `Script "${h.name || id}" (runs when the program starts)`));
+    if (c) functions.push(c);
+    functions.push(...block(R.fnOpen.replace('{name}', id), h.body));
+  }
   const callMain = handlers.map(({ id }) => fill(R.call, { fn: id, args: '' }));
   const main = R.mainOpen ? [R.mainOpen, ...callMain.map((l) => unit + l), ...(R.mainClose ? [R.mainClose] : [])] : callMain;
   if (!handlers.length) problems.push({ msg: '「プログラムが開始されたとき」のスクリプトがありません(何も実行されません)', level: 'info' });
 
-  const globalLines = ir.variables.filter((v) => globals.has(v.name)).map((v) => fill(R.globalDecl, {
+  const globalLines = ir.variables.filter((v) => globals.has(v.name)).flatMap((v) => [...(globals.get(v.name) !== v.name && note(t(`変数「${v.name}」`, `Variable "${v.name}"`)) ? [note(t(`変数「${v.name}」`, `Variable "${v.name}"`))] : []), fill(R.globalDecl, {
     name: globals.get(v.name), type: R.varTypes?.[v.type] || '',
     value: v.type === 'Number' ? String(Number(v.initial) || 0) : v.type === 'Boolean' ? (String(v.initial) === 'true' ? (R.true || 'true') : (R.false || 'false')) : q(v.initial ?? ''),
-  }));
+  })]);
   const usedKeys = [...uses];
   const imports = [...new Set(usedKeys.map((u) => R.imports?.[u]).filter(Boolean))];
   const helpers = [...new Set(usedKeys.map((u) => R.helpers?.[u]).filter(Boolean))];
@@ -190,7 +199,7 @@ function generateFromSpec(spec, project, cfg, code = {}) {
   const tplId = 'decl:' + spec.id;
   const cfgDefaults = { ...(spec.config || {}) };
   cfg = cfg || targetConfig(project, spec.id) || { type: spec.id, ...cfgDefaults };
-  const vars = { ...cfgDefaults, ...cfg, name: project.name, slug: emit.slug(project.name, '_') || 'app' };
+  const vars = { ...cfgDefaults, ...cfg, name: project.name, slug: emit.slug(project.name, '_') || 'app', note: noteFor(project, (spec.language && spec.language[0]) || 'code') };
   let files, problems = [], entry, ir;
   if (spec.source) {
     // project generator: scaffold files + another generator's output placed in source.dir

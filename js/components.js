@@ -5,7 +5,7 @@ import { fontStack, BUILTIN_FONTS, GOOGLE_FONTS } from './fonts.js';
 import { ANIMS, HOVERS, EASINGS } from './animations.js';
 import { J } from './i18n-helpers.js';
 import { assetUrl } from './model.js';
-import { osmUrl } from './maputil.js';
+import { TILE_PROVIDERS, ATTRIBUTION } from './maputil.js';
 
 export const BASE_CSS = `/* Base styles for Codiram components */
 *, *::before, *::after { box-sizing: border-box; }
@@ -36,7 +36,7 @@ export const BASE_CSS = `/* Base styles for Codiram components */
 .cx-tabhide { display: none !important; }
 .cx-form { display: flex; flex-direction: column; gap: 10px; }
 .cx-fileinput { font: inherit; font-size: 14px; }
-.cx-map { border: 0; display: block; width: 100%; min-height: 240px; border-radius: 8px; background: #e5e7eb; }
+.cx-map { border: 0; display: block; width: 100%; min-height: 240px; border-radius: 8px; background: #e5e7eb; position: relative; overflow: hidden; }
 .cx-map-ph { display: grid; place-items: center; min-height: 240px; background: repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 10px, #eef0f3 10px, #eef0f3 20px); color: #6b7280; border-radius: 8px; font-size: 14px; }
 .cx-datagrid input { width: 100%; min-width: 60px; border: 0; background: transparent; font: inherit; padding: 2px 0; }
 .cx-datagrid input:focus { outline: 2px solid #2563eb; }
@@ -274,14 +274,16 @@ const defs = [
   },
   {
     type: 'map', label: 'Map', cat: 'Advanced', icon: '🗺',
-    defaults: { props: { lat: '35.6812', lon: '139.7671', zoom: '14', marker: true }, style: { height: '320' } },
+    defaults: { props: { lat: '35.6812', lon: '139.7671', zoom: '14', marker: true, provider: 'carto', tiles: '' }, style: { height: '320' } },
     props: [
       { k: 'lat', label: 'Latitude', t: 'text', g: 'General' }, { k: 'lon', label: 'Longitude', t: 'text', g: 'General' },
       { k: 'zoom', label: 'Zoom (1-18)', t: 'text', g: 'General' }, { k: 'marker', label: 'Show marker', t: 'bool', g: 'General' },
+      { k: 'provider', label: 'Tiles', t: 'select', g: 'General', opts: ['carto', 'osm', 'osm-de', 'custom'] },
+      { k: 'tiles', label: 'Custom tile URL ({z}/{x}/{y})', t: 'text', g: 'General' },
     ],
     render: (n, c) => c.editor
       ? `<div${c.attrs(n, 'cx cx-map-ph')}>🗺 Map (${esc(n.props.lat)}, ${esc(n.props.lon)}) z${esc(n.props.zoom)}</div>`
-      : `<iframe${c.attrs(n, 'cx cx-map', `src="${esc(osmUrl(n.props.lat, n.props.lon, n.props.zoom, n.props.marker))}" loading="lazy" title="map"`)}></iframe>`,
+      : `<div${c.attrs(n, 'cx cx-map', `data-lat="${esc(n.props.lat)}" data-lon="${esc(n.props.lon)}" data-zoom="${esc(n.props.zoom)}" data-marker="${n.props.marker ? 'true' : 'false'}" data-tiles="${esc(n.props.provider === 'custom' && n.props.tiles ? n.props.tiles : TILE_PROVIDERS[n.props.provider] || TILE_PROVIDERS.carto)}" data-credit="${esc(ATTRIBUTION)}" role="img" aria-label="map"`)}></div>`,
   },
   // ---- game / media components ----
   {
