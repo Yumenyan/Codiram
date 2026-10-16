@@ -65,7 +65,7 @@ function modelEditor(m) {
   } });
 
   const fields = h('table', { class: 'tbl' },
-    h('thead', {}, h('tr', {}, h('th', {}, 'Field'), h('th', {}, 'Type'), h('th', {}))),
+    h('thead', {}, h('tr', {}, h('th', {}, 'Field'), h('th', {}, 'Type'), h('th', {}, '選択肢 / 参照先'), h('th', {}))),
     h('tbody', {}, m.fields.map((f, i) => h('tr', {},
       h('td', {}, h('input', { class: 'inp', value: f.name, onchange: (e) => {
         const nn = sanitizeIdent(e.target.value);
@@ -74,6 +74,8 @@ function modelEditor(m) {
       } })),
       h('td', {}, h('select', { class: 'sel', onchange: (e) => edit('Change type', (mm) => { mm.fields[i].type = e.target.value; }) },
         FIELD_TYPES.map((t) => h('option', { selected: t === f.type }, t)))),
+      h('td', {}, f.type === 'Enum' ? h('input', { class: 'inp', value: f.options || '', placeholder: 'A, B, C', oninput: (e) => edit('Edit options', (mm) => { mm.fields[i].options = e.target.value; }, { coalesce: 'opt' + i, origin: 'grid' }) })
+        : f.type === 'Relation' ? h('select', { class: 'sel', onchange: (e) => edit('Edit reference', (mm) => { mm.fields[i].ref = e.target.value; }) }, h('option', { value: '' }, '(参照先モデル)'), proj().models.filter((x) => x.id !== m.id).map((x) => h('option', { value: x.name, selected: x.name === f.ref }, x.name))) : null),
       h('td', {}, h('button', { class: 'icon-btn', title: 'フィールドを削除', onclick: () => edit('Delete field', (mm) => { const [d] = mm.fields.splice(i, 1); mm.rows.forEach((r) => delete r[d.name]); }) }, '✕'))))));
 
   const addField = h('button', { class: 'btn small', onclick: () => edit('Add field', (mm) => {
@@ -107,6 +109,12 @@ function grid(m, edit) {
     };
     const common = { 'data-r': ri, 'data-c': ci, onkeydown: key };
     const v = r[f.name];
+    if (f.type === 'Enum' || f.type === 'Relation') {
+      const choices = f.type === 'Enum' ? String(f.options || '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => [x, x])
+        : (proj().models.find((x) => x.name === f.ref)?.rows || []).map((r) => { const mm = proj().models.find((x) => x.name === f.ref); const lf = mm.fields.find((x) => x.type === 'String') || mm.fields[0]; return [r._id, String(r[lf.name] ?? r._id)]; });
+      return h('select', { class: 'cell', ...common, onchange: (e) => set(f.type === 'Relation' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value) },
+        h('option', { value: '' }, ''), choices.map(([val, label]) => h('option', { value: val, selected: String(val) === String(v ?? '') }, label)));
+    }
     if (f.type === 'Boolean') return h('input', { type: 'checkbox', ...common, checked: !!v, onchange: (e) => set(e.target.checked) });
     if (f.type === 'Number') return h('input', { class: 'cell', type: 'number', step: 'any', ...common, value: v ?? '', oninput: (e) => set(e.target.value === '' ? '' : Number(e.target.value)) });
     if (f.type === 'Date') return h('input', { class: 'cell', type: 'date', ...common, value: v ?? '', oninput: (e) => set(e.target.value) });

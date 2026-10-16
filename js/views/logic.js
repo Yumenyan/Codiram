@@ -8,6 +8,8 @@ import { components } from '../registry.js';
 import { promptText, menu, toast, confirmDlg } from '../ui-kit.js';
 import { L, getLang, isBi, tf } from '../i18n.js';
 import { J } from '../i18n-helpers.js';
+import { matchAction } from '../shortcuts.js';
+import { blockVisible } from '../plugins.js';
 import { ANIMS } from '../animations.js';
 
 const proj = () => store.project;
@@ -364,6 +366,12 @@ function fieldEl(ctx, id, def, key, args, path) {
     case 'page': return sel(p.pages.map((x) => [x.id, x.name]), v, set, '(ページ)');
     case 'fn': return sel(fnNames(p).map((n) => [n, n]), v, set, '(関数)');
     case 'select': return sel(f.opts, v, set);
+    case 'code': {
+      const ta = h('textarea', { class: 'f f-expr code', rows: 3, placeholder: f.ph || '', spellcheck: 'false' });
+      ta.value = v ?? '';
+      ta.addEventListener('input', () => set(ta.value, true));
+      return ta;
+    }
     case 'asset': return sel((p.assets || []).filter((a) => !f.kind || a.kind === f.kind).map((a) => ['assets/' + a.name, a.name]), v, set, '(アセット)');
     case 'fieldname': {
       const m = p.models.find((x) => x.name === args.model);
@@ -487,12 +495,11 @@ export function pasteSel() {
 export function duplicateSel() { if (copySel()) pasteSel(); }
 
 export function logicKey(e) {
-  const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
-  if (e.key === 'Delete' || e.key === 'Backspace') return deleteSel();
-  if (ctrl && k === 'c') return copySel();
-  if (ctrl && k === 'v') return pasteSel();
-  if (ctrl && k === 'd') { duplicateSel(); return true; }
-  if (ctrl && k === 'a') { const s = script(); if (!s) return false; const all = new Set(); walkBlocks(s.body, (b) => all.add(b.id)); ui.selBlocks = all; markSel(); return true; }
+  if (matchAction(e, 'delete')) return deleteSel();
+  if (matchAction(e, 'copy')) return copySel();
+  if (matchAction(e, 'paste')) return pasteSel();
+  if (matchAction(e, 'duplicate')) { duplicateSel(); return true; }
+  if (matchAction(e, 'selectall')) { const s = script(); if (!s) return false; const all = new Set(); walkBlocks(s.body, (b) => all.add(b.id)); ui.selBlocks = all; markSel(); return true; }
   if (e.key === 'Escape') { clearSel(); return true; }
   return false;
 }
@@ -528,7 +535,7 @@ function fillBlocks() {
   const fns = fnNames(proj());
   const match = (x, cat) => !q || (x.title + (x.d.en || '') + x.d.title + cat.label + cat.ja + x.d.type).toLowerCase().includes(q);
   for (const cat of BLOCK_CATS) {
-    const all = [...blocks.values()].filter((d) => d.cat === cat.id);
+    const all = [...blocks.values()].filter((d) => d.cat === cat.id && blockVisible(d));
     let cmds = palMode === 'rep' ? [] : all.filter((d) => d.kind !== 'reporter').map((d) => ({ d, title: blockTitle(d), make: () => ({ type: d.type }) }));
     if (cat.id === 'Control' && palMode !== 'rep') fns.forEach((n) => cmds.push({ d: blocks.get('call_fn'), title: tf('ƒ {0} を実行', n), make: () => ({ type: 'call_fn', args: { name: n } }) }));
     const reps = palMode === 'cmd' ? [] : all.filter(repCapable).map((d) => ({ d, title: blockTitle(d), make: () => ({ type: d.type }) }));

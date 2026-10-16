@@ -233,3 +233,9 @@ textarea.inp { width: 100%; resize: vertical; }
 .asset-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
 .asset-card img, .asset-card video { max-width: 100%; max-height: 110px; object-fit: contain; background: repeating-conic-gradient(#8883 0 25%, transparent 0 50%) 0 0 / 14px 14px; border-radius: 6px; }
 .asset-card audio { width: 100%; } .asset-card b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.console { flex: none; background: var(--panel); border-top: 1px solid var(--border); } .console summary { padding: 4px 14px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; gap: 10px; align-items: center; }
+.logbox { max-height: 150px; overflow: auto; font: 12px/1.5 var(--mono); padding: 0 14px 8px; } .logrow { border-bottom: 1px solid var(--border); padding: 1px 0; white-space: pre-wrap; } .logrow.warn { color: var(--warn); }
+.f.code { border-radius: 8px; min-width: 280px; width: 100%; resize: vertical; white-space: pre; }
+.tpl-list { grid-template-columns: repeat(2, minmax(240px, 1fr)); max-height: 62vh; overflow: auto; min-width: 520px; }
+.pack { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; cursor: pointer; }

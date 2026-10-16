@@ -18,6 +18,7 @@ export const q = (s) => JSON.stringify(String(s ?? ''));
 export const ind = (lines) => lines.map((l) => '  ' + l);
 
 export const E = (key) => ({ f: key });
+const registerBlockPatch = (type, patch) => Object.assign(blocks.get(type), patch);
 export const hat = (type, title, parts, fields, defaults, gen, summary) =>
   registerBlock({ type, cat: 'Events', kind: 'hat', icon: '⚡', ...ttl(title), parts, fields, defaults, gen, summary });
 export const stmt = (type, cat, icon, title, parts, fields, defaults, gen, slots) =>
@@ -51,10 +52,12 @@ hat('onDataChanged', T('データが変更されたとき', 'When data changes')
   (b, g, body) => [`onData(${q(b.args.model)}, async () => {`, ...ind(body), '});'],
   (a) => tf('データ {0} 変更', a.model || '?'));
 
-hat('onFunction', T('関数を定義', 'Define function'), [T('関数', 'Define function'), E('name'), T('を定義', '')],
-  { name: { t: 'text', ph: '駅を検索する' } }, { name: '' },
-  (b, g, body) => [`fns[${q(b.args.name)}] = async () => {`, ...ind(body), '};'],
+const parseParams = (src) => String(src || '').split(',').map((x) => x.trim()).filter((x) => /^[\p{L}_$][\p{L}\p{N}_$]*$/u.test(x));
+hat('onFunction', T('関数を定義', 'Define function'), [T('関数', 'Define function'), E('name'), T('を定義(引数:', '(params:'), E('params'), T(')', ')')],
+  { name: { t: 'text', ph: '駅を検索する' }, params: { t: 'text', ph: 'a, b' } }, { name: '', params: '' },
+  (b, g, body) => [`fns[${q(b.args.name)}] = async (${parseParams(b.args.params).join(', ')}) => {`, ...ind(body), '};'],
   (a) => tf('関数 {0}', a.name || '(無名)'));
+registerBlockPatch('onFunction', { hatScope: (a) => parseParams(a.params) });
 
 // ---------------- Variables ----------------
 stmt('set_var', 'Variables', '＝', T('変数に値を設定', 'Set variable'), [T('変数', 'Set variable'), E('name'), T('を', 'to'), E('value'), T('にする', '')],
@@ -92,9 +95,11 @@ stmt('wait', 'Control', '⏱', T('待つ', 'Wait'), [T('', 'Wait'), E('ms'), T('
   { ms: { t: 'expr', ph: '1000' } }, { ms: '1000' },
   (b, g) => [`await sleep(${g.expr(b.args.ms)});`]);
 
-stmt('call_fn', 'Control', 'ƒ', T('関数を実行', 'Call function'), [T('関数', 'Call function'), E('name'), T('を実行する', '')],
-  { name: { t: 'fn' } }, { name: '' },
-  (b, g) => [`await callFn(${q(b.args.name)});`]);
+stmt('call_fn', 'Control', 'ƒ', T('関数を実行', 'Call function'), [T('関数', 'Call function'), E('name'), T('を引数', 'with'), E('args'), T('で実行し、結果を', ', result into'), E('to')],
+  { name: { t: 'fn' }, args: { t: 'text', ph: '1, "abc"' }, to: { t: 'var', opt: true } }, { name: '', args: '', to: '' },
+  (b, g) => { const call = `await callFn(${q(b.args.name)}, ${g.exprList(b.args.args)})`; return [b.args.to ? `setVar(${q(b.args.to)}, ${call});` : `${call};`]; });
+stmt('fn_return', 'Control', '⏎', T('値を返す', 'Return value'), [T('関数の結果として', 'Return'), E('value'), T('を返して終了', 'and stop')],
+  { value: { t: 'expr', ph: 'a + b' } }, { value: '' }, (b, g) => [`return ${g.expr(b.args.value)};`]);
 
 // ---------------- Data ----------------
 stmt('add_row', 'Data', '＋', T('行を追加 (Create)', 'Add row (Create)'), [T('データ', 'Add to'), E('model'), T('に行を追加:', ':'), E('values')],

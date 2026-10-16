@@ -155,4 +155,228 @@ export const TEMPLATES = [
       return p;
     },
   },
+  {
+    id: 'todo', name: 'App: To-Do', desc: 'タスクの追加・チェック・削除(編集できる Data Grid + Enterキーで追加)',
+    build() {
+      const p = emptyProject('To-Do');
+      const m = newModel(p, 'Todo');
+      m.fields = [{ name: 'id', type: 'Number' }, { name: 'text', type: 'String' }, { name: 'done', type: 'Boolean' }, { name: 'category', type: 'Relation', ref: 'Category' }];
+      m.rows = [{ _id: 1, id: 1, text: 'Codiramを触ってみる', done: true, category: 1 }, { _id: 2, id: 2, text: 'アプリをExportする', done: false, category: 2 }];
+      const cat = newModel(p, 'Category');
+      cat.fields = [{ name: 'name', type: 'String' }];
+      cat.rows = [{ _id: 1, name: '仕事' }, { _id: 2, name: 'プライベート' }];
+      p.models.push(cat, m);
+      p.variables.push({ name: 'newTask', type: 'String', initial: '' });
+      const root = p.pages[0].root;
+      add(p, root, 'text', { text: '✅ To-Do' }, { fontSize: '26', bold: true });
+      const row = add(p, root, 'row');
+      const input = add(p, row, 'input', { placeholder: 'やることを入力して Enter', bind: 'newTask' }, { width: '300' });
+      const btn = add(p, row, 'button', { text: '追加' });
+      add(p, root, 'datagrid', { source: 'Todo', cols: 'done, text, category', deleteBtn: true, addBtn: false });
+      add(p, root, 'text', { text: '全 {Todo.length} 件' }, { color: '#6b7280' });
+      const addBlocks = () => [blk('if', { cond: cond('newTask', 'notempty', '') }, { then: [
+        blk('add_row', { model: 'Todo', values: { text: 'newTask', done: 'false' } }), blk('set_var', { name: 'newTask', value: '""' }), blk('sound_sfx', { name: 'click', vol: '0.2' })], else: [] })];
+      const s1 = newScript(p, 'main', 'onClick', { target: btn.id }); s1.name = '追加ボタン'; s1.body.push(...addBlocks());
+      const s2 = newScript(p, 'main', 'onEnter', { target: input.id }); s2.name = 'Enterで追加'; s2.body.push(...addBlocks());
+      p.scripts.push(s1, s2);
+      return p;
+    },
+  },
+  {
+    id: 'contacts', name: 'App: Data Manager', desc: '連絡先の登録・編集・検索・CSV入出力',
+    build() {
+      const p = emptyProject('Contacts');
+      const m = newModel(p, 'Contact');
+      m.fields = [{ name: 'id', type: 'Number' }, { name: 'name', type: 'String' }, { name: 'email', type: 'String' }, { name: 'age', type: 'Number' }];
+      m.rows = [{ _id: 1, id: 1, name: 'Alice', email: 'alice@example.com', age: 20 }, { _id: 2, id: 2, name: 'Bob', email: 'bob@example.com', age: 25 }];
+      p.models.push(m);
+      for (const v of ['name', 'email', 'age']) p.variables.push({ name: 'f_' + v, type: v === 'age' ? 'Number' : 'String', initial: v === 'age' ? '0' : '' });
+      p.variables.push({ name: 'fileText', type: 'String', initial: '' });
+      const root = p.pages[0].root;
+      add(p, root, 'text', { text: '📇 連絡先マネージャ' }, { fontSize: '26', bold: true });
+      const tabs = add(p, root, 'tabs');
+      const t1 = add(p, tabs, 'column'); t1.name = 'ひとり追加'; t1.props.title = '追加';
+      const t2 = add(p, tabs, 'column'); t2.name = '一覧'; t2.props.title = '一覧・編集';
+      const t3 = add(p, tabs, 'column'); t3.name = 'CSV'; t3.props.title = 'CSV';
+      const form = add(p, t1, 'form');
+      add(p, form, 'input', { placeholder: '名前', bind: 'f_name' }); add(p, form, 'input', { placeholder: 'メールアドレス', bind: 'f_email', inputType: 'email' });
+      add(p, form, 'input', { placeholder: '年齢', bind: 'f_age', inputType: 'number' });
+      const submit = add(p, form, 'button', { text: '登録', submit: true });
+      add(p, t2, 'datagrid', { source: 'Contact', cols: 'name, email, age', deleteBtn: true, addBtn: true });
+      add(p, t2, 'text', { text: '登録数: {Contact.length}' }, { color: '#6b7280' });
+      const dl = add(p, t3, 'button', { text: '⬇ CSVをダウンロード' });
+      const file = add(p, t3, 'fileinput', { accept: '.csv,.txt' });
+      add(p, t3, 'text', { text: 'CSVを選ぶと、先頭行が項目名(id,name,email,age)なら自動で読み込みます。' }, { color: '#6b7280', fontSize: '13' });
+      const s1 = newScript(p, 'main', 'onSubmit', { target: form.id }); s1.name = '登録';
+      s1.body.push(blk('if', { cond: cond('f_name', 'notempty', '') }, { then: [
+        blk('add_row', { model: 'Contact', values: { name: 'f_name', email: 'f_email', age: 'f_age' } }),
+        blk('form_reset', { t: form.id }), blk('tab_select', { t: tabs.id, i: '1' }), blk('sound_sfx', { name: 'coin', vol: '0.2' }),
+      ], else: [blk('alert', { value: '"名前を入力してください"' })] }));
+      const s2 = newScript(p, 'main', 'onClick', { target: dl.id }); s2.name = 'CSV出力'; s2.body.push(blk('csv_download', { model: 'Contact' }));
+      const s3 = newScript(p, 'main', 'onChange', { target: file.id }); s3.name = 'CSV取込';
+      s3.body.push(blk('file_read', { to: 'fileText', t: file.id, mode: 'text' }), blk('csv_import', { model: 'Contact', text: 'fileText' }), blk('tab_select', { t: tabs.id, i: '1' }));
+      p.scripts.push(s1, s2, s3);
+      return p;
+    },
+  },
+  {
+    id: 'dashboard', name: 'App: Dashboard', desc: '売上データを集計してカード・棒グラフ・円グラフで表示',
+    build() {
+      const p = emptyProject('Dashboard');
+      const m = newModel(p, 'Sales');
+      m.fields = [{ name: 'month', type: 'String' }, { name: 'amount', type: 'Number' }];
+      m.rows = ['1月:120', '2月:150', '3月:90', '4月:180', '5月:210', '6月:170'].map((x, i) => ({ _id: i + 1, month: x.split(':')[0], amount: Number(x.split(':')[1]) }));
+      p.models.push(m);
+      for (const v of ['total', 'average', 'best']) p.variables.push({ name: v, type: 'Number', initial: '0' });
+      p.variables.push({ name: 'rows', type: 'Array', initial: '[]' }, { name: 'amounts', type: 'Array', initial: '[]' });
+      const root = p.pages[0].root;
+      add(p, root, 'text', { text: '📊 売上ダッシュボード' }, { fontSize: '26', bold: true });
+      const cards = add(p, root, 'row', {}, { gap: '16' });
+      for (const [label, v] of [['合計', 'total'], ['平均', 'average'], ['最高', 'best']]) {
+        const c = add(p, cards, 'card', {}, { width: '160' });
+        add(p, c, 'text', { text: label }, { color: '#6b7280', fontSize: '13' });
+        add(p, c, 'text', { text: `{${v}}` }, { fontSize: '32', bold: true, color: '#2563eb' });
+      }
+      const charts = add(p, root, 'row', {}, { gap: '16', align: 'flex-start' });
+      add(p, charts, 'chart', { kind: 'bar', source: 'Sales', labelField: 'month', valueField: 'amount', title: '月別売上' }, { width: '420', height: '280' });
+      add(p, charts, 'chart', { kind: 'pie', source: 'Sales', labelField: 'month', valueField: 'amount', title: '構成比' }, { width: '380', height: '280' });
+      add(p, root, 'datagrid', { source: 'Sales', cols: 'month, amount', addBtn: true, deleteBtn: true });
+      const calc = () => [
+        blk('model_rows', { to: 'rows', model: 'Sales' }), blk('list_map', { to: 'amounts', list: 'rows', expr: 'item.amount' }),
+        blk('list_info', { to: 'total', list: 'amounts', kind: 'sum' }), blk('list_info', { to: 'average', list: 'amounts', kind: 'avg' }),
+        blk('math_round_to', { to: 'average', a: 'average', d: '1' }), blk('list_info', { to: 'best', list: 'amounts', kind: 'max' }),
+      ];
+      const s1 = newScript(p, 'main', 'onLoad', { page: 'main' }); s1.name = '集計'; s1.body.push(...calc());
+      const s2 = newScript(p, 'main', 'onDataChanged', { model: 'Sales' }); s2.name = 'データ変更時に再集計'; s2.body.push(...calc());
+      p.scripts.push(s1, s2);
+      return p;
+    },
+  },
+  {
+    id: 'apiclient', name: 'App: API Client', desc: 'Web API(JSON)を取得して一覧表示(fetch・配列ループ)',
+    build() {
+      const p = emptyProject('API Client');
+      const m = newModel(p, 'Post');
+      m.fields = [{ name: 'id', type: 'Number' }, { name: 'title', type: 'String' }];
+      p.models.push(m);
+      p.variables.push({ name: 'items', type: 'Array', initial: '[]' }, { name: 'status', type: 'String', initial: '「取得」を押してください' });
+      const root = p.pages[0].root;
+      add(p, root, 'text', { text: '🌐 API クライアント' }, { fontSize: '26', bold: true });
+      const row = add(p, root, 'row');
+      const btn = add(p, row, 'button', { text: '投稿を取得' });
+      add(p, row, 'text', { text: '{status}' }, { color: '#6b7280' });
+      add(p, root, 'table', { source: 'Post', cols: 'id, title' });
+      const s = newScript(p, 'main', 'onClick', { target: btn.id }); s.name = '取得';
+      s.body.push(blk('set_var', { name: 'status', value: '"取得中…"' }),
+        blk('try_catch', { err: 'error' }, { body: [
+          blk('sys_fetch', { to: 'items', method: 'GET', url: '"https://jsonplaceholder.typicode.com/posts?_limit=8"', body: '' }),
+          blk('clear_rows', { model: 'Post' }),
+          blk('list_foreach', { list: 'items', item: 'item', index: 'i' }, { body: [blk('add_row', { model: 'Post', values: { id: 'item.id', title: 'item.title' } })] }),
+          blk('set_var', { name: 'status', value: '"取得しました: " + items.length + " 件"' }),
+        ], catch: [blk('set_var', { name: 'status', value: '"エラー: " + error.message' })] }));
+      p.scripts.push(s);
+      return p;
+    },
+  },
+  {
+    id: 'stopwatch', name: 'App: Stopwatch', desc: 'タイマー開始・停止・リセット(タイマーブロック)',
+    build() {
+      const p = emptyProject('Stopwatch');
+      p.variables.push({ name: 'ms', type: 'Number', initial: '0' }, { name: 'display', type: 'Number', initial: '0' });
+      const root = p.pages[0].root;
+      add(p, root, 'text', { text: '⏱ ストップウォッチ' }, { fontSize: '26', bold: true });
+      add(p, root, 'text', { text: '{display} 秒' }, { fontSize: '56', bold: true, color: '#2563eb' });
+      const row = add(p, root, 'row');
+      const start = add(p, row, 'button', { text: '▶ スタート' }), stop = add(p, row, 'button', { text: '■ ストップ' }), reset = add(p, row, 'button', { text: '↺ リセット' });
+      const s1 = newScript(p, 'main', 'onClick', { target: start.id }); s1.name = 'スタート';
+      s1.body.push(blk('timer_start', { name: 'sw', ms: '100' }, { body: [blk('change_var', { name: 'ms', by: '100' }), blk('math_calc', { to: 'display', a: 'ms', op: '/', b: '1000' })] }));
+      const s2 = newScript(p, 'main', 'onClick', { target: stop.id }); s2.name = 'ストップ'; s2.body.push(blk('timer_stop', { name: 'sw' }));
+      const s3 = newScript(p, 'main', 'onClick', { target: reset.id }); s3.name = 'リセット';
+      s3.body.push(blk('timer_stop', { name: 'sw' }), blk('set_var', { name: 'ms', value: '0' }), blk('set_var', { name: 'display', value: '0' }));
+      p.scripts.push(s1, s2, s3);
+      return p;
+    },
+  },
+  {
+    id: 'quiz', name: 'App: Quiz', desc: '3択クイズ(データモデル・関数・条件分岐・効果音)',
+    build() {
+      const p = emptyProject('Quiz');
+      const m = newModel(p, 'Quiz');
+      m.fields = [{ name: 'q', type: 'String' }, { name: 'a1', type: 'String' }, { name: 'a2', type: 'String' }, { name: 'a3', type: 'String' }, { name: 'answer', type: 'Number' }];
+      m.rows = [
+        { _id: 1, q: '日本の首都は?', a1: '大阪', a2: '東京', a3: '京都', answer: 2 },
+        { _id: 2, q: '1 + 2 × 3 = ?', a1: '9', a2: '7', a3: '5', answer: 2 },
+        { _id: 3, q: 'Webページの構造を書く言語は?', a1: 'HTML', a2: 'CSS', a3: 'SQL', answer: 1 },
+      ];
+      p.models.push(m);
+      p.variables.push({ name: 'idx', type: 'Number', initial: '0' }, { name: 'score', type: 'Number', initial: '0' });
+      const root = p.pages[0].root;
+      add(p, root, 'text', { text: '🧠 クイズ   スコア: {score}' }, { fontSize: '22', bold: true });
+      const q = add(p, root, 'text', { text: '…' }, { fontSize: '24' }); q.name = 'Question';
+      const btns = [1, 2, 3].map((n) => { const b = add(p, root, 'button', { text: '…' }, { width: '320' }); b.name = 'Choice' + n; return b; });
+      const showQ = newScript(p, 'main', 'onFunction', { name: '問題を表示', params: '' }); showQ.name = '問題を表示';
+      showQ.body.push(
+        blk('set_text', { target: q.id, value: rep('r_row_field', { model: 'Quiz', index: 'idx', field: 'q' }) }),
+        ...btns.map((b, i) => blk('set_text', { target: b.id, value: rep('r_row_field', { model: 'Quiz', index: 'idx', field: 'a' + (i + 1) }) })));
+      const load = newScript(p, 'main', 'onLoad', { page: 'main' }); load.name = '開始';
+      load.body.push(blk('set_var', { name: 'idx', value: '0' }), blk('set_var', { name: 'score', value: '0' }), blk('call_fn', { name: '問題を表示', args: '', to: '' }));
+      const answer = newScript(p, 'main', 'onFunction', { name: '回答', params: 'n' }); answer.name = '回答する(n番目の選択肢)';
+      answer.body.push(
+        blk('if', { cond: { rows: [{ l: 'n', op: '==', r: rep('r_row_field', { model: 'Quiz', index: 'idx', field: 'answer' }) }], join: 'and', not: false } }, {
+          then: [blk('change_var', { name: 'score', by: '1' }), blk('sound_sfx', { name: 'coin', vol: '0.3' })], else: [blk('sound_sfx', { name: 'hit', vol: '0.3' })] }),
+        blk('change_var', { name: 'idx', by: '1' }),
+        blk('if', { cond: { rows: [{ l: 'idx', op: '>=', r: rep('r_count', { model: 'Quiz' }) }], join: 'and', not: false } }, {
+          then: [blk('alert', { value: '"おしまい! スコア: " + score + " / " + ' + 'idx' }), blk('set_var', { name: 'idx', value: '0' }), blk('set_var', { name: 'score', value: '0' })], else: [] }),
+        blk('call_fn', { name: '問題を表示', args: '', to: '' }));
+      const hooks = btns.map((b, i) => { const sc = newScript(p, 'main', 'onClick', { target: b.id }); sc.name = `選択肢${i + 1}`; sc.body.push(blk('call_fn', { name: '回答', args: String(i + 1), to: '' })); return sc; });
+      p.scripts.push(showQ, load, answer, ...hooks);
+      return p;
+    },
+  },
+  {
+    id: 'contactform', name: 'App: Form', desc: 'お問い合わせフォーム(入力チェック・送信・一覧)',
+    build() {
+      const p = emptyProject('Contact Form');
+      const m = newModel(p, 'Inquiry');
+      m.fields = [{ name: 'id', type: 'Number' }, { name: 'name', type: 'String' }, { name: 'email', type: 'String' }, { name: 'message', type: 'String' }];
+      p.models.push(m);
+      for (const v of ['name', 'email', 'message']) p.variables.push({ name: 'in_' + v, type: 'String', initial: '' });
+      const root = p.pages[0].root;
+      add(p, root, 'text', { text: '✉️ お問い合わせ' }, { fontSize: '26', bold: true });
+      const card = add(p, root, 'card', {}, { width: '420' });
+      const form = add(p, card, 'form');
+      add(p, form, 'input', { placeholder: 'お名前', bind: 'in_name' }); add(p, form, 'input', { placeholder: 'メールアドレス', bind: 'in_email', inputType: 'email' });
+      add(p, form, 'textarea', { placeholder: 'お問い合わせ内容', bind: 'in_message' });
+      add(p, form, 'button', { text: '送信', submit: true });
+      add(p, root, 'text', { text: '受信済み: {Inquiry.length} 件' }, { color: '#6b7280' });
+      add(p, root, 'table', { source: 'Inquiry', cols: 'name, email, message', deleteBtn: true });
+      const s = newScript(p, 'main', 'onSubmit', { target: form.id }); s.name = '送信';
+      s.body.push(blk('if', { cond: { rows: [{ l: 'in_name', op: 'notempty', r: '' }, { l: 'in_email', op: 'contains', r: '"@"' }], join: 'and', not: false } }, {
+        then: [blk('add_row', { model: 'Inquiry', values: { name: 'in_name', email: 'in_email', message: 'in_message' } }), blk('form_reset', { t: form.id }), blk('alert', { value: '"送信しました。ありがとうございます!"' })],
+        else: [blk('alert', { value: '"名前と正しいメールアドレスを入力してください"' })] }));
+      p.scripts.push(s);
+      return p;
+    },
+  },
+  {
+    id: 'mapapp', name: 'App: Map', desc: '場所を選ぶと地図が移動(Map部品・データ検索・値ブロック)',
+    build() {
+      const p = emptyProject('Map App');
+      const m = newModel(p, 'Place');
+      m.fields = [{ name: 'name', type: 'String' }, { name: 'lat', type: 'Number' }, { name: 'lon', type: 'Number' }];
+      m.rows = [{ _id: 1, name: '東京駅', lat: 35.6812, lon: 139.7671 }, { _id: 2, name: '大阪城', lat: 34.6873, lon: 135.5262 }, { _id: 3, name: '札幌時計台', lat: 43.0626, lon: 141.3535 }, { _id: 4, name: '福岡タワー', lat: 33.5934, lon: 130.3515 }];
+      p.models.push(m);
+      p.variables.push({ name: 'place', type: 'String', initial: '東京駅' });
+      const root = p.pages[0].root;
+      add(p, root, 'text', { text: '🗺 マップ: {place}' }, { fontSize: '26', bold: true });
+      const sel = add(p, root, 'select', { options: '東京駅, 大阪城, 札幌時計台, 福岡タワー', bind: 'place' }, { width: '240' });
+      const map = add(p, root, 'map', { lat: '35.6812', lon: '139.7671', zoom: '14', marker: true }, { height: '360' });
+      add(p, root, 'table', { source: 'Place', cols: 'name, lat, lon' });
+      const find = (f) => rep('r_find_row', { model: 'Place', cond: cond('item.name', '==', 'place'), field: f });
+      const sc = newScript(p, 'main', 'onChange', { target: sel.id }); sc.name = '場所が選ばれた';
+      sc.body.push(blk('map_set', { t: map.id, lat: find('lat'), lon: find('lon'), z: '14' }));
+      p.scripts.push(sc);
+      return p;
+    },
+  },
 ];

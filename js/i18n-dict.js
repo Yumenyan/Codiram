@@ -105,6 +105,38 @@ addPairs([
   ['Remove the value block', '値ブロックを外す'],
 ]);
 
+addPairs([
+  ['Catch stars with a basket using the arrow keys (sprites, clones, collisions, sound effects)', '矢印キーでカゴを動かして星をキャッチ(スプライト・クローン・衝突・効果音)'],
+  ['Hit the ball back with the mouse paddle (physics, collision events, sound)', 'マウスでパドルを動かしてボールを打ち返す(物理・衝突イベント・サウンド)'],
+  ['Add, check and delete tasks (editable Data Grid + Enter to add)', 'タスクの追加・チェック・削除(編集できる Data Grid + Enterキーで追加)'],
+  ['Register, edit, search and import/export contacts as CSV', '連絡先の登録・編集・検索・CSV入出力'],
+  ['Aggregate sales data into cards, bar and pie charts', '売上データを集計してカード・棒グラフ・円グラフで表示'],
+  ['Fetch Web API (JSON) and list it (fetch, list loop)', 'Web API(JSON)を取得して一覧表示(fetch・配列ループ)'],
+  ['Start / stop / reset timer (timer blocks)', 'タイマー開始・停止・リセット(タイマーブロック)'],
+  ['Three-choice quiz (data model, functions, branching, sound)', '3択クイズ(データモデル・関数・条件分岐・効果音)'],
+  ['Contact form (validation, submit, list)', 'お問い合わせフォーム(入力チェック・送信・一覧)'],
+  ['Game: Star Catcher', 'ゲーム: スターキャッチャー'], ['Game: Bounce', 'ゲーム: バウンス'], ['App: To-Do', 'アプリ: To-Do'], ['App: Data Manager', 'アプリ: データ管理'],
+  ['App: Dashboard', 'アプリ: ダッシュボード'], ['App: API Client', 'アプリ: APIクライアント'], ['App: Stopwatch', 'アプリ: ストップウォッチ'], ['App: Quiz', 'アプリ: クイズ'], ['App: Form', 'アプリ: フォーム'],
+  ['App description (meta description)', 'アプリの説明 (meta description)'], ['Favicon (one emoji)', 'ファビコン(絵文字1文字)'], ['Background color', '背景色'], ['Text color of the app', '文字色'],
+  ['Main color (buttons, tabs)', 'メインカラー(ボタン・タブ)'], ['General', '一般'], ['Appearance', '外観'], ['Advanced', '高度'],
+  ['A place to inject code for things that are hard to do in the GUI. It is appended to the exported files as-is.', 'GUIでは難しい特殊処理のためのコード挿入口です。Export したファイルにそのまま追記されます。'],
+  ['Custom CSS (appended to style.css)', 'カスタム CSS (style.css の末尾に追加)'], ['Custom JavaScript (appended to app.js)', 'カスタム JavaScript (app.js の末尾に追加)'],
+  ['Drag onto an expression field (or select a field, then click)', '式の入力欄へドラッグ(または入力欄を選んでクリック)'], ['Clear', 'クリア'],
+  ['Turn feature packs on or off. Blocks and components already used in a project keep working.', '機能のまとまり(パック)をオン/オフできます。オフにしてもプロジェクト内の既存のブロック・部品は動作し続けます。'],
+  ['Installed plugins', 'インストール済みプラグイン'], ['None yet.', 'まだありません。'], ['＋ Add plugin (.js)', '＋ プラグイン(.js)を追加'], ['How to write a plugin', 'プラグインの書き方'],
+  ['To change a shortcut, press “Change” and then the key combination you want (Esc cancels).', 'ショートカットを変更するには「変更」を押して、割り当てたいキーの組み合わせを押します(Escでキャンセル)。'],
+  ['Action', '操作'], ['Key', 'キー'], ['Change', '変更'], ['Reset all to default', 'すべて既定に戻す'],
+  ['Files added here are written to the assets/ folder on Export. Pick them in sprites, audio blocks, Image and Audio components.', 'ここに追加したファイルは Export 時に assets/ フォルダへ書き出されます。スプライトの画像・音声ブロック・Image/Audio 部品から選べます。'],
+  ['⬆ Add files', '⬆ ファイルを追加'], ['Total {0} (browser storage is limited to about 5 MB)', '合計 {0}(ブラウザ保存の上限は約5MBです)'], ['No assets yet.', 'まだアセットがありません。'],
+  ['Save as a single HTML file', '単一HTMLで保存'], ['Saved a single-file HTML', '1ファイルのHTMLを書き出しました'], ['Plugins', 'プラグイン'], ['Keyboard Shortcuts', 'キーボードショートカット'],
+  ['Tabs', 'タブ'], ['Form', 'フォーム'], ['File Input', 'ファイル入力'], ['Data Grid', 'データグリッド'], ['On Submit', '送信時'],
+  ['Chart type', 'グラフの種類'], ['Data source (model or array variable)', 'データソース(モデルまたは配列変数)'], ['Label field', 'ラベル項目'], ['Value field', '値の項目'], ['Series color', '系列の色'], ['Title', 'タイトル'],
+  ['Latitude', '緯度'], ['Longitude', '経度'], ['Zoom (1-18)', 'ズーム (1-18)'], ['Show marker', 'マーカーを表示'], ['Accepted types', '受け付ける種類'],
+  ['Editable cells', 'セルを編集可能に'], ['Add-row button', '行追加ボタン'], ['Add-row label', '行追加ボタンの文字'], ['Submit button (inside a Form)', '送信ボタン(フォーム内)'],
+  ['Columns (blank = all)', '列 (空=全て)'], ['soon', '近日'],
+  ['Console', 'コンソール'], ['Options / reference', '選択肢 / 参照先'], ['Duplicate page', 'ページを複製'], ['Insert data…', 'データを挿入'],
+]);
+
 // Code strings that differ slightly from the canonical English key
 alias('New Project — テンプレートを選択', 'New Project — choose a template');
 alias('履歴 History', 'History');

@@ -8,7 +8,7 @@ const KEY_P = 'codiram.project.';
 /** Non-persistent UI state shared between views. */
 export const ui = {
   view: 'start', pageId: null, selNode: null, selScript: null, selModel: null,
-  selBlocks: new Set(), clip: null,
+  selBlocks: new Set(), clip: null, tabs: {},
   collapsed: new Set(['Math', 'Text', 'List', 'Object', 'Time', 'Data', 'Animation', 'System'].map((c) => 'bpal:' + c)), leftTab: 'components',
   navOpen: { left: true, right: true }, errors: [], focusBlock: null,
 };

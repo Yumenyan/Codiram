@@ -4,6 +4,7 @@ import './blocks.js';
 import './blocks-extra.js';
 import './blocks-reporters.js';
 import './blocks-game.js';
+import './blocks-more.js';
 import { h, download, isTypingTarget, fmtDate } from './util.js';
 import { store, ui, subscribe, emit, undo, redo, jumpTo, saveNow, nav, saveAs, newProject, listProjects, openProject } from './store.js';
 import { lint } from './model.js';
@@ -14,9 +15,12 @@ import { renderData } from './views/data.js';
 import { renderLogic, logicKey } from './views/logic.js';
 import { renderPreview, run as runPreview } from './views/preview.js';
 import { openExport } from './export.js';
+import { matchAction } from './shortcuts.js';
+import { openShortcuts, openPlugins } from './views/prefs.js';
+import { loadInstalledPlugins } from './plugins.js';
 import { LANGS, getLang, setLang, tf, t, L } from './i18n.js';
 import './i18n-dict.js';
-import { fontSelect } from './views/fontpicker.js';
+import { fontSelect, colorField } from './views/fontpicker.js';
 
 const topbar = document.getElementById('topbar');
 const main = document.getElementById('main');
@@ -86,7 +90,7 @@ function renderTopbar() {
       h('b', {}, 'Codiram')),
   );
   if (!inProject) {
-    topbar.append(h('span', { class: 'sp' }), langBtn(), themeBtn());
+    topbar.append(h('span', { class: 'sp' }), ...toolBtns(), langBtn(), themeBtn());
     return;
   }
   const probs = lint(p).length + ui.errors.length;
@@ -101,9 +105,14 @@ function renderTopbar() {
     h('span', { class: 'sp' }),
     h('button', { class: 'btn run', title: 'Run (F5)', onclick: () => nav.run() }, '▶ Run'),
     h('button', { class: 'btn', title: 'Export', onclick: () => { saveNow(); openExport(store.project); } }, '⬇ Export'),
-    langBtn(), themeBtn());
+    ...toolBtns(), langBtn(), themeBtn());
   updateStatus();
 }
+
+const toolBtns = () => [
+  h('button', { class: 'icon-btn', title: 'Plugins', onclick: () => openPlugins(() => { mount(); }) }, '🧩'),
+  h('button', { class: 'icon-btn', title: 'Keyboard Shortcuts', onclick: () => openShortcuts() }, '⌨'),
+];
 
 const langBtn = () => h('button', { class: 'btn small lang-btn', title: 'Language / 言語', onclick: (e) => menu(e.currentTarget, LANGS.map((l) => ({ label: (l.id === getLang() ? '✓ ' : '　') + l.label, onClick: () => { setLang(l.id); mount(); renderTopbar(); } }))) }, '🌐 ' + (LANGS.find((l) => l.id === getLang())?.label || ''));
 
@@ -133,37 +142,47 @@ function projectMenu(anchor) {
 
 async function settings() {
   const p = store.project;
-  const name = h('input', { class: 'inp', value: p.name }), title = h('input', { class: 'inp', value: p.settings?.title || p.name });
-  let font = p.settings?.font || '';
-  let appLang = p.settings?.appLang || 'ja';
+  const st = { ...(p.settings || {}) };
+  const name = h('input', { class: 'inp', value: p.name }), title = h('input', { class: 'inp', value: st.title || p.name });
+  const desc = h('input', { class: 'inp', value: st.description || '' }), fav = h('input', { class: 'inp', value: st.favicon || '', placeholder: '🎮' });
   const fontHolder = h('div', {});
-  const drawFont = () => { fontHolder.textContent = ''; fontHolder.append(fontSelect(font, (v) => { font = v; drawFont(); })); };
+  const drawFont = () => { fontHolder.textContent = ''; fontHolder.append(fontSelect(st.font || '', (v) => { st.font = v; drawFont(); })); };
   drawFont();
-  const langSel = h('select', { class: 'sel', onchange: (e) => { appLang = e.target.value; } }, LANGS.map((l) => h('option', { value: l.id, selected: l.id === appLang }, l.label)));
-  const ok = await dialog({ title: 'Project Settings', body: h('div', { class: 'form' },
-    h('label', {}, 'プロジェクト名', name), h('label', {}, 'アプリのタイトル (HTML <title>)', title),
-    h('label', {}, 'アプリ全体のフォント (Google Fonts / 内蔵フォント)', fontHolder),
-    h('label', {}, '完成アプリの言語 (<html lang>)', langSel)),
+  const langSel = h('select', { class: 'sel', onchange: (e) => { st.appLang = e.target.value; } }, LANGS.map((l) => h('option', { value: l.id, selected: l.id === (st.appLang || 'ja') }, l.label)));
+  const css = h('textarea', { class: 'inp mono', rows: 5, placeholder: '/* 例: .cx-button { letter-spacing: 1px } */' }); css.value = st.customCss || '';
+  const js = h('textarea', { class: 'inp mono', rows: 5, placeholder: '// 例: document.title = "Hello";  (vars / data / setVar() が使えます)' }); js.value = st.customJs || '';
+  const sec = (title, open, ...kids) => h('details', { class: 'pgroup', open }, h('summary', {}, title), h('div', { class: 'form', style: { padding: '8px 4px 12px' } }, kids));
+  const ok = await dialog({ title: 'Project Settings', wide: true, body: h('div', {},
+    sec('General', true, h('label', {}, 'プロジェクト名', name), h('label', {}, 'アプリのタイトル (HTML <title>)', title), h('label', {}, 'アプリの説明 (meta description)', desc),
+      h('label', {}, 'ファビコン(絵文字1文字)', fav), h('label', {}, '完成アプリの言語 (<html lang>)', langSel)),
+    sec('Appearance', true, h('label', {}, 'アプリ全体のフォント (Google Fonts / 内蔵フォント)', fontHolder),
+      h('label', {}, '背景色', colorField(st.bg, (v) => { st.bg = v; })), h('label', {}, '文字色', colorField(st.textColor, (v) => { st.textColor = v; })),
+      h('label', {}, 'メインカラー(ボタン・タブ)', colorField(st.primary, (v) => { st.primary = v; }))),
+    sec('Advanced', false, h('p', { class: 'muted small' }, 'GUIでは難しい特殊処理のためのコード挿入口です。Export したファイルにそのまま追記されます。'),
+      h('label', {}, 'カスタム CSS (style.css の末尾に追加)', css), h('label', {}, 'カスタム JavaScript (app.js の末尾に追加)', js))),
     actions: [{ label: 'キャンセル', value: false }, { label: 'OK', primary: true, value: 'ok' }] });
   if (ok !== 'ok') return;
   const { commit } = await import('./store.js');
-  commit('Project settings', (pp) => { pp.name = name.value.trim() || pp.name; pp.settings = { ...pp.settings, title: title.value.trim(), font, appLang }; });
+  commit('Project settings', (pp) => {
+    pp.name = name.value.trim() || pp.name;
+    pp.settings = { ...pp.settings, ...st, title: title.value.trim(), description: desc.value.trim(), favicon: fav.value.trim(), customCss: css.value, customJs: js.value };
+  });
 }
 
 // ---------- keyboard ----------
 document.addEventListener('keydown', (e) => {
-  const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
-  if (ctrl && k === 's') { e.preventDefault(); if (store.project) { saveNow(); toast('✓ 保存しました'); } return; }
-  if (e.key === 'F5') { e.preventDefault(); if (store.project) nav.run(); return; }
-  if (ctrl && k === 'f') {
+  if (matchAction(e, 'save')) { e.preventDefault(); if (store.project) { saveNow(); toast('✓ 保存しました'); } return; }
+  if (matchAction(e, 'run')) { e.preventDefault(); if (store.project) nav.run(); return; }
+  if (matchAction(e, 'search')) {
     const s = document.querySelector('[data-search]');
     if (s) { e.preventDefault(); s.focus(); s.select(); }
     return;
   }
   if (isTypingTarget(e.target) || document.querySelector('.overlay')) return;
   if (!store.project || ui.view === 'start') return;
-  if (ctrl && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); doRedo(); return; }
-  if (ctrl && k === 'z') { e.preventDefault(); doUndo(); return; }
+  for (const v of VIEWS) if (matchAction(e, v)) { e.preventDefault(); nav.go(v); return; }
+  if (matchAction(e, 'redo')) { e.preventDefault(); doRedo(); return; }
+  if (matchAction(e, 'undo')) { e.preventDefault(); doUndo(); return; }
   let handled = false;
   if (ui.view === 'design') handled = designKey(e);
   else if (ui.view === 'logic') handled = logicKey(e);
@@ -172,6 +191,5 @@ document.addEventListener('keydown', (e) => {
 
 addEventListener('beforeunload', () => { if (store.project) saveNow(); });
 
-mount();
-renderTopbar();
+loadInstalledPlugins().finally(() => { mount(); renderTopbar(); });
 window.__codiram = { store, ui, nav, emit };

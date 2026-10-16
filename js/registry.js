@@ -5,6 +5,7 @@ export const components = new Map();
 export const blocks = new Map();
 export const exporters = new Map();
 export const plugins = [];
+export const pluginModules = {}; // extra runtime code from plugins (name -> JS source)
 
 export const registerComponent = (def) => components.set(def.type, def);
 export const registerBlock = (def) => blocks.set(def.type, def);
@@ -20,6 +21,7 @@ export function registerPlugin(plugin) {
   (plugin.components || []).forEach(registerComponent);
   (plugin.blocks || []).forEach(registerBlock);
   (plugin.exporters || []).forEach(registerExporter);
+  Object.assign(pluginModules, plugin.modules || {});
   plugin.install?.({ registerComponent, registerBlock, registerExporter });
 }
 

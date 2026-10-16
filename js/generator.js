@@ -1,13 +1,16 @@
 // Project -> ordinary web files (index.html / style.css / app.js / data/ / README.md).
 // Pure string generation (no DOM) so it also runs under Node for tests.
-import { components, blocks } from './registry.js';
+import { components, blocks, pluginModules } from './registry.js';
 import './components.js';
 import './blocks.js';
 import './blocks-extra.js';
 import './blocks-reporters.js';
 import './blocks-game.js';
+import './blocks-more.js';
 import { fontStack, googleFontsUrl } from './fonts.js';
 import { animationRules, keyframesCss } from './animations.js';
+import { drawChart } from './chartdraw.js';
+import { osmUrl } from './maputil.js';
 import { BASE_CSS, cssDecls, renderNode } from './components.js';
 import { allNodes, walk, defaultFor, nextRowId } from './model.js';
 import { esc } from './util.js';
@@ -149,7 +152,8 @@ function makeCtx(project, debug) {
 
 function genCss(project, keyframes) {
   const f = project.settings?.font;
-  const out = [BASE_CSS, `body { margin: 0; font-family: ${fontStack(f) || '"Hiragino Sans", "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif'}; color: #1f2328; background: #fff; }`,
+  const st = project.settings || {};
+  const out = [BASE_CSS, st.primary ? `:root { --primary: ${st.primary}; }` : '', `body { margin: 0; font-family: ${fontStack(f) || '"Hiragino Sans", "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif'}; color: ${st.textColor || '#1f2328'}; background: ${st.bg || '#fff'}; }`,
     '.page { min-height: 100vh; }'];
   if (keyframes) out.push('', '/* ---- Animations ---- */', keyframesCss(), '@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }');
   out.push('', '/* ---- Component styles ---- */');
@@ -162,6 +166,7 @@ function genCss(project, keyframes) {
     for (const r of animationRules(node.props)) out.push(`${sel}${r.suffix} {`, ...r.decls.map((d) => `  ${d};`), '}');
     if (out[out.length - 1].startsWith('/*')) out.pop();
   }
+  if (st.customCss && st.customCss.trim()) out.push('', '/* ---- Custom CSS (Project Settings) ---- */', st.customCss.trim());
   return out.join('\n') + '\n';
 }
 
@@ -177,13 +182,16 @@ function genHtml(project) {
     return `  <section id="${p.root.id}" class="page cx cx-page" data-page="${esc(p.id)}"${hidden}>\n    ${body}\n  </section>`;
   });
   const fontUrl = googleFontsUrl(usedFontValues(project));
+  const stg = project.settings || {};
+  const desc = stg.description ? `\n  <meta name="description" content="${esc(stg.description)}">` : '';
+  const icon = stg.favicon ? `\n  <link rel="icon" href="data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>${stg.favicon}</text></svg>`)}">` : '';
   const fontTags = fontUrl ? `\n  <link rel="preconnect" href="https://fonts.googleapis.com">\n  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n  <link rel="stylesheet" href="${esc(fontUrl)}">` : '';
   return `<!DOCTYPE html>
 <html lang="${esc(project.settings?.appLang || 'ja')}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${esc(project.settings?.title || project.name)}</title>${fontTags}
+  <title>${esc(project.settings?.title || project.name)}</title>${desc}${icon}${fontTags}
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -208,6 +216,10 @@ function genJs(project, debug, persist) {
   const models = {};
   project.models.forEach((m) => {
     models[m.name] = { fields: m.fields.map((f) => f.name), types: Object.fromEntries(m.fields.map((f) => [f.name, f.type])) };
+    const opts = Object.fromEntries(m.fields.filter((f) => f.type === 'Enum').map((f) => [f.name, String(f.options || '').split(',').map((x) => x.trim()).filter(Boolean)]));
+    const refs = Object.fromEntries(m.fields.filter((f) => f.type === 'Relation' && f.ref).map((f) => [f.name, f.ref]));
+    if (Object.keys(opts).length) models[m.name].options = opts;
+    if (Object.keys(refs).length) models[m.name].refs = refs;
   });
   const vars = Object.fromEntries(project.variables.map((v) => [v.name, typedVar(v)]));
   // 1) logic first, so we know which optional runtime modules are needed
@@ -216,17 +228,20 @@ function genJs(project, debug, persist) {
     const def = blocks.get(s.hat.type);
     if (!def) continue;
     logic.push('', `// ▶ ${s.name || (def.summary ? def.summary(s.hat.args, project) : def.title)}`);
-    const body = def.bodyScope ? g.withClone(def.bodyScope.it, () => g.stack(s.body), def.bodyScope.me) : g.stack(s.body);
+    const body = def.bodyScope ? g.withClone(def.bodyScope.it, () => g.stack(s.body), def.bodyScope.me)
+      : def.hatScope ? g.scoped(def.hatScope(s.hat.args), () => g.stack(s.body)) : g.stack(s.body);
     logic.push(...def.gen({ id: 'hat:' + s.id, type: s.hat.type, args: s.hat.args }, g, body));
   }
+  if (allNodes(project).some(({ node }) => node.type === 'chart')) g.use('chart');
   const L = [];
   L.push(`/* ${project.name} — generated by Codiram. Plain JavaScript: edit freely. */`, '"use strict";', '');
   L.push('// ===== 1. Data models =====', `const MODELS = ${JSON.stringify(models, null, 2)};`, '');
   L.push('// ===== 2. State =====', `const vars = ${JSON.stringify(vars, null, 2)};`,
     `const APP_ID = ${q(project.id)};`, `const PERSIST = ${persist ? 'true' : 'false'};`, 'const data = loadData();', '');
   L.push(RUNTIME, '');
-  for (const [name, code] of Object.entries(MODULES)) if (g.used.has(name)) L.push(code, '');
+  for (const [name, code] of Object.entries({ ...MODULES, ...pluginModules })) if (g.used.has(name)) L.push(code, '');
   L.push('// ===== 4. Logic (generated from blocks) =====', ...logic);
+  if ((project.settings?.customJs || '').trim()) L.push('', '// ===== 4b. Custom JavaScript (Project Settings) =====', project.settings.customJs.trim());
   L.push('', '// ===== 5. Start =====', 'boot();', '');
   return { js: L.join('\n'), used: g.used };
 }
@@ -238,6 +253,7 @@ const fns = {};
 const pageHandlers = {};
 const dataHandlers = {};
 let currentPage = null;
+let skipEl = null; // table being edited: not re-rendered while the user types
 
 function reportError(e) {
   console.error(e);
@@ -254,9 +270,9 @@ function on(id, type, fn) {
 function onPage(page, fn) { (pageHandlers[page] = pageHandlers[page] || []).push(guard(fn)); }
 function onData(model, fn) { (dataHandlers[model] = dataHandlers[model] || []).push(guard(fn)); }
 function every(ms, fn) { setInterval(guard(fn), Math.max(50, Number(ms) || 1000)); }
-async function callFn(name) {
+async function callFn(name, args) {
   if (!fns[name]) throw new Error("関数が定義されていません: " + name);
-  await fns[name]();
+  return await fns[name](...(args || []));
 }
 
 // ---- storage ----
@@ -317,12 +333,22 @@ function showPage(id) {
   refresh();
   (pageHandlers[id] || []).forEach((fn) => fn());
 }
+function lookup(path, row) {
+  const parts = path.match(/[^.\[\]]+/g) || [];
+  const first = parts.shift();
+  let cur;
+  if (row && first in row) cur = row[first];
+  else if (first in vars) cur = vars[first];
+  else if (first in data) cur = data[first];
+  else return undefined;
+  for (const p of parts) { if (cur == null) return undefined; cur = cur[p]; }
+  return cur;
+}
+// "{name}", "{items.length}", "{User[0].name}" ...
 function interpolate(template, row) {
   return String(template).replace(/\{([^{}]+)\}/g, (m, key) => {
-    key = key.trim();
-    if (row && key in row) return row[key];
-    if (key in vars) return vars[key];
-    return m;
+    const v = lookup(key.trim(), row);
+    return v === undefined ? m : v !== null && typeof v === "object" ? JSON.stringify(v) : v;
   });
 }
 
@@ -335,7 +361,8 @@ function refresh() {
     if (el.type === "checkbox") el.checked = !!v;
     else if (String(el.value) !== String(v == null ? "" : v)) el.value = v == null ? "" : v;
   });
-  document.querySelectorAll("[data-source]").forEach(renderCollection);
+  document.querySelectorAll("[data-source]").forEach((el) => { if (el !== skipEl && el.tagName !== "CANVAS") renderCollection(el); });
+  if (typeof refreshCharts === "function") refreshCharts();
 }
 function renderCollection(el) {
   const name = el.dataset.source;
@@ -351,7 +378,27 @@ function renderCollection(el) {
     const body = el.createTBody();
     rows.forEach((row) => {
       const tr = body.insertRow();
-      cols.forEach((c) => { tr.insertCell().textContent = cell(row[c]); });
+      cols.forEach((c) => {
+        const td = tr.insertCell();
+        if (!el.hasAttribute("data-editable")) { td.textContent = display(name, c, row[c]); return; }
+        const type = (model.types || {})[c];
+        const choice = type === "Enum" || type === "Relation";
+        const input = document.createElement(choice ? "select" : "input");
+        if (choice) {
+          input.append(new Option("", ""));
+          choicesOf(name, c).forEach(([v, label]) => input.append(new Option(label, v)));
+          input.value = row[c] == null ? "" : String(row[c]);
+        } else {
+          input.type = type === "Number" ? "number" : type === "Boolean" ? "checkbox" : type === "Date" ? "date" : "text";
+          if (type === "Boolean") input.checked = !!row[c]; else input.value = cell(row[c]);
+        }
+        input.addEventListener("change", () => {
+          row[c] = coerce(name, c, type === "Boolean" ? input.checked : input.value);
+          skipEl = el;
+          try { touch(name); } finally { skipEl = null; }
+        });
+        td.append(input);
+      });
       if (el.hasAttribute("data-delete")) {
         const btn = document.createElement("button");
         btn.textContent = el.getAttribute("data-delete") || "削除";
@@ -360,12 +407,34 @@ function renderCollection(el) {
         tr.insertCell().append(btn);
       }
     });
+    if (el.hasAttribute("data-add")) {
+      const cell0 = el.createTFoot().insertRow().insertCell();
+      cell0.colSpan = cols.length + (el.hasAttribute("data-delete") ? 1 : 0);
+      const add = document.createElement("button");
+      add.type = "button";
+      add.textContent = el.getAttribute("data-add") || "+";
+      add.addEventListener("click", () => addRow(name, {}));
+      cell0.append(add);
+    }
   } else {
     const tpl = el.dataset.template || "{" + (model.fields[0] || "id") + "}";
     rows.forEach((row) => { const li = document.createElement("li"); li.textContent = interpolate(tpl, row); el.append(li); });
   }
 }
 function cell(v) { return v !== null && typeof v === "object" ? JSON.stringify(v) : v == null ? "" : String(v); }
+// Relation fields store the _id of a row of another model; show that row's first text field instead
+function refLabel(refModel, id) {
+  const m = MODELS[refModel], row = (data[refModel] || []).find((r) => r._id === Number(id));
+  if (!m || !row) return "";
+  const f = m.fields.find((x) => m.types[x] === "String") || m.fields[0];
+  return cell(row[f]);
+}
+function display(model, field, v) { const ref = ((MODELS[model] || {}).refs || {})[field]; return ref ? refLabel(ref, v) : cell(v); }
+function choicesOf(model, field) {
+  const m = MODELS[model], ref = (m.refs || {})[field];
+  if (ref) return (data[ref] || []).map((r) => [r._id, refLabel(ref, r._id)]);
+  return ((m.options || {})[field] || []).map((x) => [x, x]);
+}
 
 // ---- data operations ----
 const busy = {};
@@ -380,7 +449,9 @@ function touch(name) {
 function coerce(model, field, v) {
   const t = (MODELS[model].types || {})[field];
   if (t === "Number") return v === "" || v == null ? 0 : Number(v);
+  if (t === "Relation") return v === "" || v == null ? null : Number(v);
   if (t === "Boolean") return v === true || v === "true";
+  if (t === "Array" || t === "Object") { try { return typeof v === "string" ? JSON.parse(v) : v; } catch (e) { return v; } }
   return v;
 }
 function addRow(model, values) {
@@ -441,12 +512,37 @@ function boot() {
     input.addEventListener(ev, () => { vars[el.dataset.bind] = readInput(input); refresh(); });
     if (!(el.dataset.bind in vars)) vars[el.dataset.bind] = readInput(input);
   });
+  document.querySelectorAll("form").forEach((f) => f.addEventListener("submit", (e) => e.preventDefault()));
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest && e.target.closest("[data-tab]");
+    if (t) selectTab(t.closest("[data-tabs]").id, Number(t.dataset.tab));
+  });
   const first = document.querySelector(".page");
   showPage(first ? first.dataset.page : null);
+}
+function selectTab(id, i) {
+  const root = $(id);
+  if (!root) return;
+  root.querySelectorAll(":scope > .cx-tabbar > .cx-tab").forEach((b, k) => b.classList.toggle("on", k === i));
+  [...root.querySelector(":scope > .cx-tabpanels").children].forEach((p, k) => p.classList.toggle("cx-tabhide", k !== i));
 }`;
 
 
 const MODULES = {
+  chart: `// ---- charts ----
+${drawChart.toString()}
+function refreshCharts() {
+  document.querySelectorAll("canvas[data-chart]").forEach((cv) => {
+    const d = cv.dataset, src = d.source, m = MODELS[src];
+    let rows = [];
+    if (m) rows = (data[src] || []).map((r) => ({ label: r[d.label || m.fields[0]], value: r[d.value || m.fields[1] || m.fields[0]] }));
+    else if (Array.isArray(vars[src])) rows = vars[src].map((v, i) => (v !== null && typeof v === "object" ? { label: v[d.label] ?? i + 1, value: v[d.value] } : { label: i + 1, value: v }));
+    drawChart(cv, rows, { kind: d.kind, title: d.title, color: d.color });
+  });
+}`,
+  map: `// ---- map ----
+${osmUrl.toString()}
+function setMap(id, lat, lon, zoom) { const el = $(id); if (el) el.src = osmUrl(lat, lon, zoom, true); }`,
   list: String.raw`// ---- list / object helpers ----
 function listOf(name) { if (!Array.isArray(vars[name])) vars[name] = []; return vars[name]; }
 function listOp(name, fn) { const result = fn(listOf(name)); refresh(); return result; }
@@ -842,6 +938,65 @@ function cvImage(id, src, x, y, w, h) {
   const draw = () => c.drawImage(img, Number(x), Number(y), Number(w) || img.width, Number(h) || img.height);
   if (img.complete) draw(); else img.addEventListener("load", draw, { once: true });
 }`,
+  csv: String.raw`// ---- CSV ----
+function toCsv(model) {
+  const m = MODELS[model];
+  if (!m) return "";
+  const esc = (v) => { v = v !== null && typeof v === "object" ? JSON.stringify(v) : v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  return [m.fields.join(","), ...(data[model] || []).map((r) => m.fields.map((f) => esc(r[f])).join(","))].join("\n");
+}
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cur = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else quoted = false; } else cur += ch; }
+    else if (ch === '"') quoted = true;
+    else if (ch === "," || ch === "\t") { row.push(cur); cur = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(cur); rows.push(row); row = []; cur = ""; }
+    else cur += ch;
+  }
+  if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c !== ""));
+}
+function importCsv(model, text) {
+  const m = MODELS[model];
+  if (!m) return;
+  const rows = parseCsv(String(text));
+  let head = m.fields;
+  if (rows.length && rows[0].some((c) => m.fields.includes(c))) head = rows.shift();
+  for (const r of rows) {
+    const obj = {};
+    head.forEach((f, i) => { if (m.fields.includes(f) && r[i] !== undefined) obj[f] = r[i]; });
+    addRow(model, obj);
+  }
+}`,
+  file: String.raw`// ---- file input ----
+function readFile(id, mode) {
+  const input = inputOf($(id)), f = input && input.files && input.files[0];
+  if (!f) return Promise.resolve("");
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    if (mode === "dataurl") r.readAsDataURL(f); else r.readAsText(f);
+  });
+}`,
+  ws: String.raw`// ---- WebSocket ----
+let ws = null, wsMessage = "";
+const wsHandlers = [];
+function wsConnect(url) {
+  wsClose();
+  ws = new WebSocket(String(url));
+  ws.onmessage = (ev) => { wsMessage = ev.data; wsHandlers.forEach((fn) => fn()); };
+  ws.onerror = () => reportError(new Error("WebSocket error"));
+}
+function wsSend(msg) {
+  if (ws && ws.readyState === 1) ws.send(typeof msg === "string" ? msg : JSON.stringify(msg));
+  else reportError(new Error("WebSocket is not connected"));
+}
+function wsClose() { if (ws) { ws.close(); ws = null; } }
+function onWs(fn) { wsHandlers.push(guard(fn)); }`,
   sys: String.raw`// ---- system helpers ----
 const memStore = {};
 function storeSet(key, value) { const s = JSON.stringify(value); try { localStorage.setItem("app:" + key, s); } catch (e) { memStore[key] = s; } }
@@ -951,6 +1106,13 @@ function __at(id) { __cur = id; }
 window.__codiramReport = function (e) {
   parent.postMessage({ codiram: 'error', block: __cur, message: String((e && e.message) || e) }, '*');
 };
+['log', 'info', 'warn'].forEach(function (l) {
+  var orig = console[l];
+  console[l] = function () {
+    try { parent.postMessage({ codiram: 'log', level: l, text: Array.prototype.map.call(arguments, function (a) { return typeof a === 'object' ? JSON.stringify(a) : String(a); }).join(' ') }, '*'); } catch (e) { /* ignore */ }
+    orig.apply(console, arguments);
+  };
+});
 window.addEventListener('error', function (ev) { window.__codiramReport(ev.error || ev.message); });
 window.addEventListener('unhandledrejection', function (ev) { window.__codiramReport(ev.reason); });
 </script>` : '';

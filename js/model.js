@@ -4,7 +4,7 @@ import { uid, clone, sanitizeIdent } from './util.js';
 import { components, blocks } from './registry.js';
 import { tf, t as tt } from './i18n.js';
 
-export const FIELD_TYPES = ['String', 'Number', 'Boolean', 'Date', 'Array', 'Object'];
+export const FIELD_TYPES = ['String', 'Number', 'Boolean', 'Date', 'Array', 'Object', 'Enum', 'Relation'];
 export const VAR_TYPES = ['String', 'Number', 'Boolean'];
 
 export function newPage(name, id) {
@@ -55,7 +55,7 @@ export function newModel(project, name = 'Model') {
 export const nextRowId = (model) => model.rows.reduce((m, r) => Math.max(m, r._id || 0), 0) + 1;
 
 export function defaultFor(type) {
-  return type === 'Number' ? 0 : type === 'Boolean' ? false : type === 'Array' ? [] : type === 'Object' ? {} : '';
+  return type === 'Number' ? 0 : type === 'Boolean' ? false : type === 'Array' ? [] : type === 'Object' ? {} : type === 'Relation' ? null : '';
 }
 
 // ---------- node tree ----------
@@ -102,6 +102,28 @@ export function createNode(project, type) {
 }
 
 /** Deep copy with new ids and project-unique names (for duplicate / paste / library insert). */
+/** Copy a page (nodes get new ids/names; the page's scripts are copied and re-pointed at the new nodes). */
+export function duplicatePage(project, pageId) {
+  const src = project.pages.find((x) => x.id === pageId);
+  if (!src) return null;
+  const root = freshClone(project, src.root);
+  const idMap = new Map();
+  const pair = (a, b) => { idMap.set(a.id, b.id); (a.children || []).forEach((c, i) => pair(c, b.children[i])); };
+  pair(src.root, root);
+  const page = { id: uid('pg'), name: src.name + ' (copy)', root };
+  idMap.set(src.id, page.id);
+  const remap = (v) => {
+    if (typeof v === 'string') return idMap.has(v) ? idMap.get(v) : v;
+    if (Array.isArray(v)) return v.map(remap);
+    if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = k === 'id' ? uid('b') : remap(v[k]); return o; }
+    return v;
+  };
+  const scripts = project.scripts.filter((x) => x.page === pageId).map((x) => ({ ...remap(clone(x)), id: uid('s'), page: page.id, name: x.name ? x.name + ' (copy)' : '' }));
+  project.pages.push(page);
+  project.scripts.push(...scripts);
+  return page;
+}
+
 export function freshClone(project, node) {
   const copy = clone(node);
   const taken = new Set();

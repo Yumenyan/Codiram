@@ -1,6 +1,6 @@
 // Export dialog: shows generated files and downloads them as a ZIP.
 import { h, download } from './util.js';
-import { generate } from './generator.js';
+import { generate, bundleInline } from './generator.js';
 import { makeZip } from './zip.js';
 import { dialog, toast } from './ui-kit.js';
 
@@ -24,6 +24,7 @@ export async function openExport(project) {
       h('div', { class: 'export-grid' }, list, code)),
     actions: [
       { label: '現在のファイルをコピー', onClick: async () => { if (typeof files[cur] === 'string') await navigator.clipboard?.writeText(files[cur]); toast('コピーしました'); return false; } },
+      { label: '単一HTMLで保存', onClick: () => { download(`${slug}.html`, bundleInline(files, { assets: project.assets }), 'text/html'); toast('1ファイルのHTMLを書き出しました'); return false; } },
       { label: '閉じる', value: false },
       { label: '⬇ ZIP をダウンロード', primary: true, onClick: () => { download(`${slug}.zip`, makeZip(Object.fromEntries(Object.entries(files).map(([k, v]) => [`${slug}/${k}`, v])))); toast('ZIP を書き出しました'); } },
     ],

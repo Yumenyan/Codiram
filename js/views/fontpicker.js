@@ -19,3 +19,11 @@ export function fontSelect(value, onChange, attrs = {}) {
   h('option', { value: '__custom' }, '＋ Google Fonts 名を入力…'));
   return sel;
 }
+
+const hex = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#000000');
+/** colour swatch + text input; onChange(value) ('' = default) */
+export function colorField(value, onChange) {
+  const txt = h('input', { class: 'inp', value: value || '', placeholder: '(default)', oninput: (e) => { onChange(e.target.value); sw.value = hex(e.target.value); } });
+  const sw = h('input', { type: 'color', class: 'swatch', value: hex(value), oninput: (e) => { txt.value = e.target.value; onChange(e.target.value); } });
+  return h('div', { class: 'colorf' }, sw, txt);
+}

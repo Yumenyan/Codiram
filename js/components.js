@@ -5,6 +5,7 @@ import { fontStack, BUILTIN_FONTS, GOOGLE_FONTS } from './fonts.js';
 import { ANIMS, HOVERS, EASINGS } from './animations.js';
 import { J } from './i18n-helpers.js';
 import { assetUrl } from './model.js';
+import { osmUrl } from './maputil.js';
 
 export const BASE_CSS = `/* Base styles for Codiram components */
 *, *::before, *::after { box-sizing: border-box; }
@@ -12,7 +13,7 @@ export const BASE_CSS = `/* Base styles for Codiram components */
 .cx-page, .cx-container, .cx-row, .cx-column, .cx-card, .cx-modal-box { display: flex; flex-direction: column; }
 .cx-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .cx-text { white-space: pre-wrap; word-break: break-word; }
-.cx-button { padding: 8px 16px; font: inherit; font-size: 14px; border: 1px solid #2563eb; background: #2563eb; color: #fff; border-radius: 6px; cursor: pointer; }
+.cx-button { padding: 8px 16px; font: inherit; font-size: 14px; border: 1px solid var(--primary, #2563eb); background: var(--primary, #2563eb); color: #fff; border-radius: 6px; cursor: pointer; }
 .cx-button:hover { filter: brightness(1.1); }
 .cx-input, .cx-textarea, .cx-select { padding: 7px 10px; font: inherit; font-size: 14px; border: 1px solid #c4c9d4; border-radius: 6px; background: #fff; color: #1f2328; min-width: 0; }
 .cx-textarea { min-height: 72px; resize: vertical; }
@@ -27,6 +28,18 @@ export const BASE_CSS = `/* Base styles for Codiram components */
 .cx-modal { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .cx-modal-box { background: #fff; border-radius: 12px; padding: 20px; min-width: 280px; max-width: 90vw; max-height: 90vh; overflow: auto; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
 [hidden] { display: none !important; }
+.cx-tabs { display: flex; flex-direction: column; }
+.cx-tabbar { display: flex; gap: 2px; border-bottom: 2px solid #d9dde5; flex-wrap: wrap; }
+.cx-tab { border: 0; background: none; padding: 8px 16px; font: inherit; font-size: 14px; color: #6b7280; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.cx-tab:hover { color: #1f2328; } .cx-tab.on { color: var(--primary, #2563eb); border-bottom-color: var(--primary, #2563eb); font-weight: 600; }
+.cx-tabpanels { padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.cx-tabhide { display: none !important; }
+.cx-form { display: flex; flex-direction: column; gap: 10px; }
+.cx-fileinput { font: inherit; font-size: 14px; }
+.cx-map { border: 0; display: block; width: 100%; min-height: 240px; border-radius: 8px; background: #e5e7eb; }
+.cx-map-ph { display: grid; place-items: center; min-height: 240px; background: repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 10px, #eef0f3 10px, #eef0f3 20px); color: #6b7280; border-radius: 8px; font-size: 14px; }
+.cx-datagrid input { width: 100%; min-width: 60px; border: 0; background: transparent; font: inherit; padding: 2px 0; }
+.cx-datagrid input:focus { outline: 2px solid #2563eb; }
 .cx-stage { position: relative; overflow: hidden; touch-action: none; user-select: none; }
 .cx-sprite { position: absolute; display: grid; place-items: center; user-select: none; touch-action: none; line-height: 1; }
 .cx-sprite img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
@@ -95,6 +108,38 @@ const container = (cls, label, icon, extra = {}) => ({
   render: (n, c, kids) => `<div${c.attrs(n, 'cx cx-' + cls)}>${kids}</div>`,
 });
 
+
+function tableDef(type, label, icon, editable) {
+  return {
+    type, label, cat: 'Data', icon,
+    defaults: { props: { source: '', cols: '', deleteBtn: false, deleteLabel: '削除', editable, addBtn: editable, addLabel: '＋ 行を追加' }, style: {} },
+    props: [
+      { k: 'source', label: 'Data source (model)', t: 'model', g: 'Data' },
+      { k: 'cols', label: 'Columns (blank = all)', t: 'text', g: 'Data', ph: 'name, email' },
+      { k: 'editable', label: 'Editable cells', t: 'bool', g: 'Data' },
+      { k: 'addBtn', label: 'Add-row button', t: 'bool', g: 'Data' },
+      { k: 'addLabel', label: 'Add-row label', t: 'text', g: 'Data' },
+      { k: 'deleteBtn', label: 'Row delete button', t: 'bool', g: 'Data' },
+      { k: 'deleteLabel', label: 'Delete button label', t: 'text', g: 'Data' },
+    ],
+    render: (n, c) => {
+      const m = sel(c.project, n.props.source);
+      const attrs = `data-source="${esc(n.props.source)}" data-cols="${esc(n.props.cols)}"${n.props.deleteBtn ? ` data-delete="${esc(n.props.deleteLabel || '削除')}"` : ''}${n.props.editable ? ' data-editable' : ''}${n.props.addBtn ? ` data-add="${esc(n.props.addLabel || '＋')}"` : ''}`;
+      let inner = '';
+      if (c.editor) {
+        if (!m) inner = '<tbody><tr><td>データモデルを選択してください</td></tr></tbody>';
+        else {
+          const cols = splitList(n.props.cols).length ? splitList(n.props.cols) : m.fields.map((f) => f.name);
+          inner = `<thead><tr>${cols.map((x) => `<th>${esc(x)}</th>`).join('')}${n.props.deleteBtn ? '<th></th>' : ''}</tr></thead><tbody>` +
+            m.rows.slice(0, 8).map((r) => `<tr>${cols.map((x) => `<td>${esc(r[x] ?? '')}</td>`).join('')}${n.props.deleteBtn ? `<td>${esc(n.props.deleteLabel || '削除')}</td>` : ''}</tr>`).join('') + '</tbody>' +
+            (n.props.addBtn ? `<tfoot><tr><td colspan="${cols.length + (n.props.deleteBtn ? 1 : 0)}">${esc(n.props.addLabel || '＋')}</td></tr></tfoot>` : '');
+        }
+      }
+      return `<table${c.attrs(n, 'cx cx-table' + (n.props.editable ? ' cx-datagrid' : ''), attrs)}>${inner}</table>`;
+    },
+  };
+}
+
 const defs = [
   {
     type: 'text', label: 'Text', cat: 'Basic', icon: 'T', events: EVENT_CLICK,
@@ -105,8 +150,8 @@ const defs = [
   {
     type: 'button', label: 'Button', cat: 'Basic', icon: '▭', events: EVENT_CLICK,
     defaults: { props: { text: 'Button' }, style: {} },
-    props: [{ k: 'text', label: 'Text', t: 'text', g: 'General' }],
-    render: (n, c) => `<button${c.attrs(n, 'cx cx-button', 'type="button"')}>${esc(n.props.text)}</button>`,
+    props: [{ k: 'text', label: 'Text', t: 'text', g: 'General' }, { k: 'submit', label: 'Submit button (inside a Form)', t: 'bool', g: 'General' }],
+    render: (n, c) => `<button${c.attrs(n, 'cx cx-button', `type="${n.props.submit ? 'submit' : 'button'}"`)}>${esc(n.props.text)}</button>`,
   },
   {
     type: 'input', label: 'Input', cat: 'Basic', icon: '▁', events: EVENT_CHANGE,
@@ -148,30 +193,8 @@ const defs = [
     props: [],
     render: (n, c, kids) => `<div${c.attrs(n, 'cx cx-modal', c.editor ? '' : 'hidden')}><div class="cx-modal-box">${kids}</div></div>`,
   },
-  {
-    type: 'table', label: 'Table', cat: 'Data', icon: '▦',
-    defaults: { props: { source: '', cols: '', deleteBtn: false, deleteLabel: '削除' }, style: {} },
-    props: [
-      { k: 'source', label: 'Data source (model)', t: 'model', g: 'Data' },
-      { k: 'cols', label: 'Columns (空=全て)', t: 'text', g: 'Data', ph: 'name, email' },
-      { k: 'deleteBtn', label: '行の削除ボタン', t: 'bool', g: 'Data' },
-      { k: 'deleteLabel', label: '削除ボタンの文字', t: 'text', g: 'Data' },
-    ],
-    render: (n, c) => {
-      const m = sel(c.project, n.props.source);
-      const attrs = `data-source="${esc(n.props.source)}" data-cols="${esc(n.props.cols)}"${n.props.deleteBtn ? ` data-delete="${esc(n.props.deleteLabel || '削除')}"` : ''}`;
-      let inner = '';
-      if (c.editor) {
-        if (!m) inner = '<tbody><tr><td>データモデルを選択してください</td></tr></tbody>';
-        else {
-          const cols = splitList(n.props.cols).length ? splitList(n.props.cols) : m.fields.map((f) => f.name);
-          inner = `<thead><tr>${cols.map((x) => `<th>${esc(x)}</th>`).join('')}${n.props.deleteBtn ? '<th></th>' : ''}</tr></thead><tbody>` +
-            m.rows.slice(0, 8).map((r) => `<tr>${cols.map((x) => `<td>${esc(r[x] ?? '')}</td>`).join('')}${n.props.deleteBtn ? `<td>${esc(n.props.deleteLabel || '削除')}</td>` : ''}</tr>`).join('') + '</tbody>';
-        }
-      }
-      return `<table${c.attrs(n, 'cx cx-table', attrs)}>${inner}</table>`;
-    },
-  },
+  tableDef('table', 'Table', '▦', false),
+  tableDef('datagrid', 'Data Grid', '▤', true),
   {
     type: 'list', label: 'List', cat: 'Data', icon: '☰',
     defaults: { props: { source: '', template: '' }, style: {} },
@@ -210,6 +233,55 @@ const defs = [
     defaults: { props: { src: '' }, style: { width: '320' } },
     props: [{ k: 'src', label: 'Video URL', t: 'asset', g: 'General', kind: 'video' }],
     render: (n, c) => `<video${c.attrs(n, 'cx cx-video', `controls src="${esc(c.editor ? assetUrl(c.project, n.props.src) : n.props.src)}"`)}></video>`,
+  },
+  // ---- tabs / form / advanced ----
+  {
+    type: 'tabs', label: 'Tabs', cat: 'Layout', icon: '⊟', container: true, childHost: '.cx-tabpanels',
+    defaults: { props: {}, style: {} }, props: [],
+    childCls: (n, c, i, ctx) => ((ctx.tabs && ctx.tabs[n.id] !== undefined ? ctx.tabs[n.id] : 0) === i ? '' : 'cx-tabhide'),
+    render: (n, c, kids) => {
+      const act = (c.tabs && c.tabs[n.id] !== undefined ? c.tabs[n.id] : 0);
+      const bar = n.children.map((k, i) => `<button type="button" class="cx-tab${i === act ? ' on' : ''}" data-tab="${i}">${esc(k.props.title || k.name)}</button>`).join('') || '<span style="color:#9aa3b2;padding:8px">タブにしたい部品(コンテナ等)をここにドロップ</span>';
+      return `<div${c.attrs(n, 'cx cx-tabs', 'data-tabs')}><div class="cx-tabbar">${bar}</div><div class="cx-tabpanels">${kids}</div></div>`;
+    },
+  },
+  {
+    type: 'form', label: 'Form', cat: 'Data', icon: '📝', container: true, events: [{ key: 'submit', label: 'On Submit', hat: 'onSubmit' }],
+    defaults: { props: {}, style: { gap: '10' } }, props: [],
+    render: (n, c, kids) => `<form${c.attrs(n, 'cx cx-form', 'novalidate')}>${kids}</form>`,
+  },
+  {
+    type: 'fileinput', label: 'File Input', cat: 'Basic', icon: '📎', events: EVENT_CHANGE,
+    defaults: { props: { accept: '' }, style: {} },
+    props: [{ k: 'accept', label: 'Accepted types', t: 'text', g: 'General', ph: '.csv,.txt / image/*' }],
+    render: (n, c) => `<input${c.attrs(n, 'cx cx-fileinput', `type="file"${n.props.accept ? ` accept="${esc(n.props.accept)}"` : ''}${c.editor ? ' tabindex="-1"' : ''}`)}>`,
+  },
+  {
+    type: 'chart', label: 'Chart', cat: 'Advanced', icon: '📈',
+    defaults: { props: { kind: 'bar', source: '', labelField: '', valueField: '', title: '', color: '' }, style: { width: '480', height: '300' } },
+    props: [
+      { k: 'kind', label: 'Chart type', t: 'select', g: 'Data', opts: [['bar', J('棒グラフ', 'Bar')], ['line', J('折れ線', 'Line')], ['pie', J('円グラフ', 'Pie')]] },
+      { k: 'source', label: 'Data source (model or array variable)', t: 'chartsource', g: 'Data' },
+      { k: 'labelField', label: 'Label field', t: 'text', g: 'Data', ph: 'name' },
+      { k: 'valueField', label: 'Value field', t: 'text', g: 'Data', ph: 'amount' },
+      { k: 'title', label: 'Title', t: 'text', g: 'General' },
+      { k: 'color', label: 'Series color', t: 'color', g: 'Style' },
+    ],
+    render: (n, c) => {
+      const a = `data-chart data-kind="${esc(n.props.kind)}" data-source="${esc(n.props.source)}" data-label="${esc(n.props.labelField)}" data-value="${esc(n.props.valueField)}" data-title="${esc(n.props.title)}" data-color="${esc(n.props.color)}"`;
+      return `<canvas${c.attrs(n, 'cx cx-canvas cx-chart', `${a} width="${Number(n.style.width) || 480}" height="${Number(n.style.height) || 300}"`)}></canvas>`;
+    },
+  },
+  {
+    type: 'map', label: 'Map', cat: 'Advanced', icon: '🗺',
+    defaults: { props: { lat: '35.6812', lon: '139.7671', zoom: '14', marker: true }, style: { height: '320' } },
+    props: [
+      { k: 'lat', label: 'Latitude', t: 'text', g: 'General' }, { k: 'lon', label: 'Longitude', t: 'text', g: 'General' },
+      { k: 'zoom', label: 'Zoom (1-18)', t: 'text', g: 'General' }, { k: 'marker', label: 'Show marker', t: 'bool', g: 'General' },
+    ],
+    render: (n, c) => c.editor
+      ? `<div${c.attrs(n, 'cx cx-map-ph')}>🗺 Map (${esc(n.props.lat)}, ${esc(n.props.lon)}) z${esc(n.props.zoom)}</div>`
+      : `<iframe${c.attrs(n, 'cx cx-map', `src="${esc(osmUrl(n.props.lat, n.props.lon, n.props.zoom, n.props.marker))}" loading="lazy" title="map"`)}></iframe>`,
   },
   // ---- game / media components ----
   {
@@ -261,8 +333,6 @@ defs.forEach(registerComponent);
 
 // Placeholders for future plugins (shown disabled in the palette).
 export const COMING_SOON = [
-  { label: 'Map', icon: '🗺', cat: 'Advanced' },
-  { label: 'Chart', icon: '📈', cat: 'Advanced' },
   { label: 'Custom Component', icon: '🧩', cat: 'Advanced' },
 ];
 
@@ -324,9 +394,9 @@ export function propSchema(node) {
 export function renderNode(node, ctx) {
   const def = components.get(node.type);
   if (!def) return `<!-- unknown component ${esc(node.type)} -->`;
-  const kids = (node.children || []).map((c) => renderNode(c, ctx)).join('');
+  const kids = (node.children || []).map((c, i) => renderNode(c, { ...ctx, extraCls: def.childCls ? def.childCls(node, c, i, ctx) : '' })).join('');
   const attrs = (n, cls, extra = '') => {
-    let a = ` id="${n.id}" class="${cls}${ctx.editor && def.container && !n.children.length ? ' cx-empty' : ''}"`;
+    let a = ` id="${n.id}" class="${cls}${ctx.extraCls ? ' ' + ctx.extraCls : ''}${ctx.editor && def.container && !n.children.length ? ' cx-empty' : ''}"`;
     if (ctx.editor) {
       a += ` data-nid="${n.id}" data-type="${n.type}"`;
       if (n.type !== 'page') a += ' draggable="true"';

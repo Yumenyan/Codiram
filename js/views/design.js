@@ -3,13 +3,15 @@ import { h, esc, clone, sanitizeIdent } from '../util.js';
 import { components } from '../registry.js';
 import { CATS, COMING_SOON, renderNode, propSchema } from '../components.js';
 import { store, ui, commit, nav, getLibrary, setLibrary } from '../store.js';
-import { findNode, createNode, freshClone, isContainer, newPage, uniqueName, newScript, walk, allNodes } from '../model.js';
+import { findNode, createNode, freshClone, isContainer, newPage, uniqueName, newScript, walk, allNodes, duplicatePage } from '../model.js';
 import { promptText, menu, toast, confirmDlg } from '../ui-kit.js';
 import { BASE_CSS } from '../components.js';
 import { fontSelect } from './fontpicker.js';
 import { fontStack, googleFontsUrl } from '../fonts.js';
 import { keyframesCss, animationDecl } from '../animations.js';
 import { L, tf, t } from '../i18n.js';
+import { matchAction } from '../shortcuts.js';
+import { componentVisible } from '../plugins.js';
 
 let root, els = {}, search = '', device = 'full';
 const proj = () => store.project;
@@ -50,6 +52,8 @@ function build() {
   els.stageWrap.append(els.stage);
   els.stageWrap.addEventListener('mousedown', (e) => {
     if (e.target.closest('.handle')) return;
+    const tb = e.target.closest('[data-tab]');
+    if (tb) { const owner = tb.closest('[data-nid]'); ui.tabs[owner.dataset.nid] = Number(tb.dataset.tab); ui.selNode = owner.dataset.nid; renderStage(); renderProps(); renderToolbar(); return; }
     const el = e.target.closest('[data-nid]');
     select(el ? el.dataset.nid : page().root.id);
   });
@@ -98,6 +102,7 @@ function pageMenu(anchor) {
   const pg = page();
   menu(anchor, [
     { label: 'ページ名を変更…', onClick: async () => { const n = await promptText('ページ名', pg.name); if (n) commit('Rename page', (p) => { p.pages.find((x) => x.id === pg.id).name = n; }); } },
+    { label: 'ページを複製', onClick: () => { let id; commit('Duplicate page', (p) => { id = duplicatePage(p, pg.id).id; }); ui.pageId = id; ui.selNode = null; renderDesign(root); } },
     { label: 'ページを削除', disabled: proj().pages.length < 2, onClick: async () => {
       if (!(await confirmDlg('ページを削除', tf('「{0}」とそのロジックを削除します(Undoで戻せます)。', pg.name), '削除'))) return;
       commit('Delete page', (p) => { p.pages = p.pages.filter((x) => x.id !== pg.id); p.scripts = p.scripts.filter((s) => s.page !== pg.id); });
@@ -124,7 +129,7 @@ function fillPalette() {
   els.palette.textContent = '';
   const match = (l) => !q || l.toLowerCase().includes(q);
   for (const cat of CATS) {
-    const items = [...components.values()].filter((d) => d.cat === cat && !d.hidden && match(d.label));
+    const items = [...components.values()].filter((d) => d.cat === cat && !d.hidden && componentVisible(d) && match(d.label));
     const soon = COMING_SOON.filter((d) => d.cat === cat && match(d.label));
     if (!items.length && !soon.length) continue;
     els.palette.append(catSection(cat, [
@@ -171,7 +176,7 @@ function select(id) {
 }
 
 function renderStage() {
-  const ctx = { project: proj(), editor: true };
+  const ctx = { project: proj(), editor: true, tabs: ui.tabs };
   els.surface.innerHTML = renderNode(page().root, ctx);
   els.surface.style.maxWidth = device === 'full' ? '' : device + 'px';
   syncFonts();
@@ -186,6 +191,9 @@ function syncFonts() {
   if (url && !link) { link = h('link', { id: 'cx-fonts', rel: 'stylesheet' }); document.head.append(link); }
   if (link && link.getAttribute('href') !== url) { if (url) link.setAttribute('href', url); else link.remove(); }
   els.surface.style.fontFamily = fontStack(p.settings?.font);
+  els.surface.style.background = p.settings?.bg || '';
+  els.surface.style.color = p.settings?.textColor || '';
+  if (p.settings?.primary) els.surface.style.setProperty('--primary', p.settings.primary); else els.surface.style.removeProperty('--primary');
   // fonts may load late and change sizes
   document.fonts?.ready.then(() => placeOverlay());
 }
@@ -243,7 +251,7 @@ function onDragStart(e) {
   select(el.dataset.nid);
 }
 
-const hostOf = (el) => (el.querySelector(':scope > .cx-modal-box') && el.dataset.type === 'modal' ? el.querySelector(':scope > .cx-modal-box') : el);
+const hostOf = (el) => { const sel = components.get(el.dataset.type)?.childHost; return (sel && el.querySelector(':scope > ' + sel)) || el; };
 
 /** Where would a drop at the pointer land? -> {containerEl, index, line:{x,y,w,h}} */
 function dropTarget(e) {
@@ -484,6 +492,9 @@ function propRow(node, pr) {
     case 'bool': input = h('input', { type: 'checkbox', checked: !!val, 'data-prop': pr.k, onchange: (e) => set(e.target.checked) }); break;
     case 'select': input = h('select', { class: 'sel', 'data-prop': pr.k, onchange: (e) => set(e.target.value) },
       pr.opts.map((o) => { const [ov, ol] = Array.isArray(o) ? o : [o, o === '' ? '(default)' : o]; return h('option', { value: ov, selected: String(val ?? '') === ov }, ol); })); break;
+    case 'chartsource': input = h('select', { class: 'sel', 'data-prop': pr.k, onchange: (e) => set(e.target.value) },
+      h('option', { value: '' }, '(なし)'), proj().models.map((m) => h('option', { value: m.name, selected: val === m.name }, '▦ ' + m.name)),
+      proj().variables.filter((v) => v.type === 'Array').map((v) => h('option', { value: v.name, selected: val === v.name }, '[ ] ' + v.name))); break;
     case 'font': input = fontSelect(val, (v) => set(v), { 'data-prop': pr.k }); break;
     case 'asset': {
       const list = (proj().assets || []).filter((a) => !pr.kind || a.kind === pr.kind);
@@ -509,6 +520,12 @@ function propRow(node, pr) {
     case 'name': input = h('input', { class: 'inp', value: val ?? '', 'data-prop': 'name', onchange: (e) => { set(e.target.value); } }); break;
     default: input = h('input', { class: 'inp', value: val ?? '', placeholder: pr.ph || '', 'data-prop': pr.k, oninput: (e) => set(e.target.value, live) });
   }
+  if (node.type === 'text' && pr.k === 'text') {
+    const refs = [...proj().variables.map((v) => v.name), ...proj().models.flatMap((m) => [m.name + '.length', ...m.fields.map((f) => m.name + '[0].' + f.name)])];
+    const ins = h('select', { class: 'sel', title: 'データ・変数を挿入', onchange: (e) => { if (!e.target.value) return; set((node.props.text || '') + '{' + e.target.value + '}'); } },
+      h('option', { value: '' }, '＋ {データを挿入}'), refs.map((r) => h('option', { value: r }, r)));
+    return h('div', { class: 'prow' }, h('label', {}, pr.label), h('div', {}, input, ins));
+  }
   return h('div', { class: 'prow' + (pr.t === 'bool' ? ' inline' : '') }, h('label', {}, pr.label), input);
 }
 
@@ -532,11 +549,10 @@ function uniqueNameFor(p, node, v) {
 }
 
 export function designKey(e) {
-  const ctrl = e.ctrlKey || e.metaKey;
-  if (e.key === 'Delete' || e.key === 'Backspace') { deleteSel(); return true; }
-  if (ctrl && e.key.toLowerCase() === 'd') { duplicateSel(); return true; }
-  if (ctrl && e.key.toLowerCase() === 'c') { return copySel(); }
-  if (ctrl && e.key.toLowerCase() === 'v') { return pasteSel(); }
+  if (matchAction(e, 'delete')) { deleteSel(); return true; }
+  if (matchAction(e, 'duplicate')) { duplicateSel(); return true; }
+  if (matchAction(e, 'copy')) { return copySel(); }
+  if (matchAction(e, 'paste')) { return pasteSel(); }
   if (e.altKey && e.key === 'ArrowUp') { moveSibling(-1); return true; }
   if (e.altKey && e.key === 'ArrowDown') { moveSibling(1); return true; }
   if (e.key.startsWith('Arrow') && !e.altKey) {
