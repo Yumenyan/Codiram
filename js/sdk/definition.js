@@ -11,8 +11,9 @@
 //     "expressions": { not, neg, concat, ops:{}, calls:{ contains, isEmpty, pow, random, ternary }, globalRef, localRef },
 //     "statements":  { comment, globalDecl, set, log, call, wait, print, printInline, exit },
 //     "io":          { readLine, arg, readFile, fileExists, writeFile, appendFile },
-//     "conditions":  { ifOpen, elseOpen },  "loops": { repeatOpen },  "functions": { fnOpen, fnGlobals },
-//     "events":      { mainOpen, mainClose },
+//     "conditions":  { ifOpen, elseOpen },  "loops": { repeatOpen },  "functions": { fnOpen, fnGlobals, fnParam },
+//     "events":      { mainOpen, mainClose, mainIndent, eventHandlers:{ "<event>": template with {body} } },
+//     "extensions":  { customStatements:{ "ns.op": template }, customValues:{ "fn": template } },
 //     "syntax":      { indent, close, emptyBody, keywords:[] },
 //     "mappings":    { imports:{ use: line }, helpers:{ use: code } },
 //     "templates":   { program:{ file, template }, files:{ path: text with {{vars}} } },
@@ -35,12 +36,13 @@ export const RULE_SECTIONS = {
   io: ['readLine', 'arg', 'readFile', 'fileExists', 'writeFile', 'appendFile'],
   conditions: ['ifOpen', 'elseOpen'],
   loops: ['repeatOpen'],
-  functions: ['fnOpen', 'fnGlobals'],
-  events: ['mainOpen', 'mainClose'],
+  functions: ['fnOpen', 'fnGlobals', 'fnParam'],
+  events: ['mainOpen', 'mainClose', 'mainIndent', 'eventHandlers'],
+  extensions: ['customStatements', 'customValues'],
   syntax: ['indent', 'close', 'emptyBody', 'keywords'],
   mappings: ['imports', 'helpers'],
 };
-const OBJECT_RULES = new Set(['varTypes', 'ops', 'calls', 'imports', 'helpers']);
+const OBJECT_RULES = new Set(['varTypes', 'ops', 'calls', 'imports', 'helpers', 'eventHandlers', 'customStatements', 'customValues']);
 const TOP_KEYS = new Set(['format', 'schemaVersion', 'kind', 'extends', 'fragment', 'generator', 'target', 'capabilities', ...Object.keys(RULE_SECTIONS), 'templates', 'scaffold', 'verify', '$schema', 'comment']);
 const ID = /^[a-z][a-z0-9-]{1,30}$/;
 

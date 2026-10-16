@@ -11,7 +11,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'docs
 const write = (rel, data) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), JSON.stringify(data, null, 2) + '\n'); };
 
 write('schemas/generator-definition.schema.json', buildJsonSchema());
-for (const [name, spec] of [['python', PRESETS.python], ['nodejs-cli', PRESETS.nodejs], ['vite-web', PRESETS.viteWeb]]) write(`definitions/${name}.json`, toDefinition(spec));
+for (const spec of Object.values(PRESETS)) write(`definitions/${spec.id}.json`, toDefinition(spec));
 // the same Python definition split into parts: import python-core.json + python-io.json together (or one after the other)
 const { core, parts } = splitDefinition(toDefinition(PRESETS.python), { 'python-io': ['io'], 'python-types': ['types'] });
 write('definitions/split/python-core.json', core);

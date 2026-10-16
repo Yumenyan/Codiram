@@ -15,7 +15,7 @@ defineGenerator({
   views: ['design', 'data', 'logic', 'preview'],
   defaultConfig: () => ({ type: 'web' }),
   configFields: [],
-  generate: (project) => ({ files: generate(project), problems: [], root: null, entry: 'index.html' }),
+  generate: (project, cfg) => ({ files: generate(project, { htmlOnly: !!cfg?.htmlOnly }), problems: [], root: null, entry: 'index.html' }),
   bundleInline,
   verify: { requiredFiles: ['index.html', 'style.css', 'app.js'], contains: { 'index.html': ['app.js'] }, syntax: { js: ['app.js'] } },
 });

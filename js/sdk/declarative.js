@@ -24,7 +24,7 @@ const ID = /^[a-z][a-z0-9-]{1,30}$/;
 const RULES_REQUIRED = ['comment', 'globalDecl', 'set', 'ifOpen', 'elseOpen', 'repeatOpen', 'call', 'fnOpen', 'log'];
 const PROGRAM_SLOTS = ['functions', 'main'];
 /** rules that a capability needs */
-const CAP_RULES = { io: ['print', 'readLine'], cli: ['arg', 'exit'], filesystem: ['readFile', 'writeFile', 'appendFile', 'fileExists'] };
+const CAP_RULES = { io: ['print'], input: ['readLine'], cli: ['arg', 'exit'], filesystem: ['readFile', 'writeFile', 'appendFile', 'fileExists'] };
 
 export function validateSpec(spec) {
   const errs = [];
@@ -37,12 +37,13 @@ export function validateSpec(spec) {
   if (spec.source) {
     // project generator wrapping another generator's output (Tauri / Vite style): no language rules needed
     if (!GeneratorRegistry.get(spec.source.generator)) errs.push(`scaffold.source.generator "${spec.source.generator}" is not a registered generator`);
-    else if (GeneratorRegistry.get(spec.source.generator).engine !== 'blocks') errs.push('scaffold.source.generator must be a block-based generator (e.g. web)');
+  } else if (spec.kind === 'project' && !spec.program) {
+    if (!Object.keys(spec.files || {}).length) errs.push('a project generator needs templates.files, scaffold.source or templates.program');
   } else {
     const rules = spec.rules || {};
     for (const k of RULES_REQUIRED) if (!rules[k]) errs.push(`rules.${k} is required`);
     if (!spec.program?.file) errs.push('templates.program.file is required');
-    for (const s of PROGRAM_SLOTS) if (!(spec.program?.template || '').includes(`{{${s}}}`)) errs.push(`templates.program.template must contain {{${s}}}`);
+    for (const s of PROGRAM_SLOTS.filter((x) => x !== 'main' || !rules.eventHandlers)) if (!(spec.program?.template || '').includes(`{{${s}}}`)) errs.push(`templates.program.template must contain {{${s}}}`);
     for (const cap of spec.supports || []) for (const k of CAP_RULES[cap] || []) if (!rules[k]) errs.push(`capability "${cap}" needs rules.${k}`);
     files[spec.program?.file || ''] = spec.program?.template || '';
   }
@@ -100,6 +101,13 @@ export function emitProgram(ir, spec, project, hooks = {}) {
         if (e.fn === 'random' || e.fn === 'pow') { v.a = num(a[0]); v.b = num(a[1]); }
         return fill(t, v);
       }
+      case 'bot': case 'custom': {
+        const t = R.customValues?.[e.fn];
+        if (!t) { problems.push({ msg: `${spec.id}: extensions.customValues.${e.fn} が未定義です` }); return '""'; }
+        const v = {};
+        for (const [k, val] of Object.entries(e.args || {})) v[k] = val && typeof val === 'object' ? str(val) : String(val);
+        return fill(t, v);
+      }
       case 'cli': {
         const a = e.args || [], rule = { readLine: 'readLine', arg: 'arg', readFile: 'readFile', fileExists: 'fileExists' }[e.fn];
         if (!need(rule, e.fn)) return '""';
@@ -149,7 +157,12 @@ export function emitProgram(ir, spec, project, hooks = {}) {
       }
       default: {
         const custom = hooks.statements?.[s.op]; // code extension point: ops no rule can express
-        if (custom) push(...[].concat(custom(s, { x, str, num, bool, fill, q, R })));
+        const tpl = R.customStatements?.[s.op];
+        if (tpl) {
+          const v = {};
+          for (const [k, val] of Object.entries(s)) if (k !== 'op') v[k] = val && typeof val === 'object' && val.k ? str(val) : String(val);
+          push(fill(tpl, v));
+        } else if (custom) push(...[].concat(custom(s, { x, str, num, bool, fill, q, R })));
         else problems.push({ msg: `unsupported statement: ${s.op}` });
       }
     }
@@ -169,7 +182,7 @@ export function emitProgram(ir, spec, project, hooks = {}) {
     const info = fns.get(f.fnName);
     const c = note(t(`関数「${f.fnName}」${f.params.length ? '(引数: ' + f.params.join(', ') + ')' : ''}`, `Function "${f.fnName}"${f.params.length ? ' (parameters: ' + f.params.join(', ') + ')' : ''}`));
     if (c) functions.push(c);
-    functions.push(...block(R.fnOpen.replace('{name}', info.id), f.body, f.params.map((q2) => emit.snakeCase(q2) || 'arg').join(', ')));
+    functions.push(...block(R.fnOpen.replace('{name}', info.id), f.body, f.params.map((q2) => fill(R.fnParam || '{name}', { name: emit.snakeCase(q2) || 'arg' })).join(', ')));
   }
   const handlers = ir.handlers.filter((h) => h.kind === 'main').map((h) => ({ h, id: handlerName(/^[ -~]+$/.test(h.name || '') ? h.name : 'on_start', 'on_start') }));
   for (const { h, id } of handlers) {
@@ -177,9 +190,25 @@ export function emitProgram(ir, spec, project, hooks = {}) {
     if (c) functions.push(c);
     functions.push(...block(R.fnOpen.replace('{name}', id), h.body));
   }
+  const evHandlers = ir.handlers.filter((h) => h.kind === 'event');
+  for (const h of evHandlers) {
+    const tpl = R.eventHandlers?.[h.event];
+    if (!tpl) { problems.push({ msg: `${spec.id}: events.eventHandlers["${h.event}"] が未定義です` }); continue; }
+    assigned = new Set();
+    const body = stmts(h.body, 0);
+    const lines = [];
+    for (const line of tpl.split('\n')) {
+      const m = /^(\s*)\{body\}\s*$/.exec(line);
+      if (m) lines.push(...body.map((l) => (l ? m[1] + l : l)));
+      else lines.push(fill(line, Object.fromEntries(Object.entries(h.args || {}).map(([k, v]) => [k, String(v)]))));
+    }
+    functions.push(lines.join('\n'), '');
+  }
+  if (handlers.length && !(spec.program?.template || '').includes('{{main}}')) problems.push({ msg: `${spec.id}: 「プログラムが開始されたとき」はこのジェネレーターでは実行されません(イベントのブロックを使ってください)` });
   const callMain = handlers.map(({ id }) => fill(R.call, { fn: id, args: '' }));
-  const main = R.mainOpen ? [R.mainOpen, ...callMain.map((l) => unit + l), ...(R.mainClose ? [R.mainClose] : [])] : callMain;
-  if (!handlers.length) problems.push({ msg: '「プログラムが開始されたとき」のスクリプトがありません(何も実行されません)', level: 'info' });
+  const mainPad = R.mainIndent ?? '';
+  const main = R.mainOpen ? [R.mainOpen, ...callMain.map((l) => unit + l), ...(R.mainClose ? [R.mainClose] : [])] : callMain.map((l) => mainPad + l);
+  if (!handlers.length && !evHandlers.length) problems.push({ msg: '開始/イベントのスクリプトがありません(何も実行されません)', level: 'info' });
 
   const globalLines = ir.variables.filter((v) => globals.has(v.name)).flatMap((v) => [...(globals.get(v.name) !== v.name && note(t(`変数「${v.name}」`, `Variable "${v.name}"`)) ? [note(t(`変数「${v.name}」`, `Variable "${v.name}"`))] : []), fill(R.globalDecl, {
     name: globals.get(v.name), type: R.varTypes?.[v.type] || '',
@@ -199,16 +228,19 @@ function generateFromSpec(spec, project, cfg, code = {}) {
   const tplId = 'decl:' + spec.id;
   const cfgDefaults = { ...(spec.config || {}) };
   cfg = cfg || targetConfig(project, spec.id) || { type: spec.id, ...cfgDefaults };
-  const vars = { ...cfgDefaults, ...cfg, name: project.name, slug: emit.slug(project.name, '_') || 'app', note: noteFor(project, (spec.language && spec.language[0]) || 'code') };
+  const vars = { ...cfgDefaults, ...cfg, name: project.name, slug: emit.slug(project.name, '_') || 'app', note: noteFor(project, spec.name.en || spec.id) };
   let files, problems = [], entry, ir;
   if (spec.source) {
     // project generator: scaffold files + another generator's output placed in source.dir
-    const src = GeneratorRegistry.get(spec.source.generator).generate(project, null);
+    const src = GeneratorRegistry.get(spec.source.generator).generate(project, spec.source.config || null);
     const dir = spec.source.dir ? spec.source.dir.replace(/\/?$/, '/') : '';
     files = renderProjectTemplate(tplId, vars);
     for (const [n, c] of Object.entries(src.files)) if (!(spec.source.exclude || []).includes(n)) files[dir + n] = c;
     problems = src.problems || [];
     entry = src.entry ? dir + src.entry : null;
+  } else if (!spec.program) {
+    files = renderProjectTemplate(tplId, vars); // scaffold-only project generator
+    entry = Object.keys(files)[0];
   } else {
     ir = buildSemanticModel(project, spec.id);
     const out = emitProgram(ir, spec, project, code);
@@ -235,15 +267,16 @@ export function defineDeclarativeGenerator(spec, code = {}) {
   const cfgDefaults = { ...(spec.config || {}) };
   return defineGenerator({
     id: spec.id, order: spec.order ?? 5, external: !spec.builtin && !spec.draft, hidden: !!spec.draft, spec, kind: spec.kind || 'syntax',
-    ...(parent ? { engine: 'blocks', inherits: parent.id } : { portable: true }),
+    ...(parent ? { engine: 'blocks', inherits: parent.id } : spec.program ? { portable: true } : { engine: 'data' }),
     name: { ja: spec.name.ja || spec.name.en, en: spec.name.en || spec.name.ja },
     icon: spec.icon || '⚙', desc: spec.desc || J('', ''),
-    version: spec.version, language: spec.language || [], platforms: spec.platforms || [], supports: spec.supports || [],
-    views: parent ? parent.views : ['data', 'logic', 'output'],
+    version: spec.version, language: spec.language || [], platforms: spec.platforms || [],
+    supports: [...new Set([...(spec.supports || []), ...((spec.program?.template || '').includes('{{main}}') ? ['entry'] : [])])], // a program with {{main}} has a start-up entry point
+    views: parent ? parent.views : spec.program ? ['data', 'logic', 'output'] : ['data', 'output'],
     defaultConfig: () => ({ type: spec.id, ...cfgDefaults }),
     configFields: (spec.configFields || []).map((f) => ({ key: f.key, label: { ja: f.label, en: f.label }, ph: f.ph })),
     generate: (project, cfg) => generateFromSpec(spec, project, cfg, code),
-    lint: parent ? undefined : (project) => buildSemanticModel(project, spec.id).problems.filter((p) => !p.unsupported).map((p) => ({ script: p.script, block: p.block, msg: p.msg })),
+    lint: parent || !spec.program ? undefined : (project) => buildSemanticModel(project, spec.id).problems.filter((p) => !p.unsupported).map((p) => ({ script: p.script, block: p.block, msg: p.msg })),
     verify: spec.verify || {},
   });
 }

@@ -32,7 +32,8 @@
     "functions",
     "filesystem",
     "cli",
-    "io"
+    "io",
+    "input"
   ],
   "expressions": {
     "not": "(not {a})",

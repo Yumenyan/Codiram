@@ -3,7 +3,7 @@
   "schemaVersion": 2,
   "kind": "syntax",
   "generator": {
-    "id": "nodejs-cli",
+    "id": "nodejs",
     "name": {
       "ja": "Node.js CLI",
       "en": "Node.js CLI"
@@ -32,7 +32,8 @@
     "functions",
     "filesystem",
     "cli",
-    "io"
+    "io",
+    "input"
   ],
   "types": {
     "toStr": "String({a})",

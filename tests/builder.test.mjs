@@ -16,6 +16,7 @@ import { sampleProject } from '../js/sdk/sample.js';
 import { registerPlugin } from '../js/registry.js';
 import { cliGolden, webGolden } from './golden/projects.mjs';
 
+const NODE_EXT = { ...PRESETS.nodejs, id: 'node-ext', builtin: false };
 let mem = '[]';
 storage.get = () => mem; storage.set = (v) => { mem = v; };
 const has = (tool) => { try { execFileSync(tool, ['--version'], { stdio: 'ignore' }); return true; } catch { return false; } };
@@ -38,14 +39,14 @@ assert.ok(!GeneratorRegistry.get('preview-draft'));
 assert.ok(previewSpec({ ...blankSpec(), id: 'x' }, sampleProject()).errors.length);
 
 // install the Node.js preset as an EXTERNAL generator and run the golden CLI program through it
-installGeneratorSpec(PRESETS.nodejs);
-assert.ok(GeneratorRegistry.get('nodejs-cli').external);
-assert.ok(GeneratorRegistry.list().some((g) => g.id === 'nodejs-cli'));
+installGeneratorSpec(NODE_EXT);
+assert.ok(GeneratorRegistry.get('node-ext').external);
+assert.ok(GeneratorRegistry.list().some((g) => g.id === 'node-ext'));
 assert.equal(userGenerators().length, 1);
 {
-  const { project, stdout } = cliGolden({ type: 'nodejs-cli', version: '0.1.0' });
-  const res = runGenerator(project, 'nodejs-cli');
-  assert.deepEqual(verifyGenerated(res, GeneratorRegistry.get('nodejs-cli').verify), []);
+  const { project, stdout } = cliGolden({ type: 'node-ext', version: '0.1.0' });
+  const res = runGenerator(project, 'node-ext');
+  assert.deepEqual(verifyGenerated(res, GeneratorRegistry.get('node-ext').verify), []);
   if (has('node')) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codiram-node-'));
     for (const [n, c] of Object.entries(res.files)) fs.writeFileSync(path.join(dir, n), c);
@@ -53,19 +54,19 @@ assert.equal(userGenerators().length, 1);
   }
   // blocks the generator has no capability for are rejected
   const web = sampleProject(); web.scripts.push({ ...web.scripts[0], id: 'x', hat: { type: 'onClick', args: { target: 'q' } }, body: [] });
-  web.targets = [{ type: 'nodejs-cli' }]; web.activeTarget = 'nodejs-cli';
-  assert.ok(GeneratorRegistry.get('nodejs-cli').validate(web).problems.some((p) => p.unsupported));
+  web.targets = [{ type: 'node-ext' }]; web.activeTarget = 'node-ext';
+  assert.ok(GeneratorRegistry.get('node-ext').validate(web).problems.some((p) => p.unsupported));
 }
 // reload from storage after a "restart"
-uninstallGenerator('nodejs-cli');
-assert.ok(!GeneratorRegistry.get('nodejs-cli') && userGenerators().length === 0);
-installGeneratorSpec(PRESETS.nodejs); GeneratorRegistry.unregister('nodejs-cli');
+uninstallGenerator('node-ext');
+assert.ok(!GeneratorRegistry.get('node-ext') && userGenerators().length === 0);
+installGeneratorSpec(NODE_EXT); GeneratorRegistry.unregister('node-ext');
 assert.deepEqual(loadUserGenerators(), []);
-assert.ok(GeneratorRegistry.get('nodejs-cli'));
+assert.ok(GeneratorRegistry.get('node-ext'));
 // export / import round trip
 assert.deepEqual(toDefinition(parseSpecFile(exportSpec(PRESETS.nodejs))), toDefinition(PRESETS.nodejs));
 assert.throws(() => parseSpecFile('{"format":"x"}'), /format must be/);
-uninstallGenerator('nodejs-cli');
+uninstallGenerator('node-ext');
 
 // a plugin can ship generators (data) and code generators
 registerPlugin({ id: 'demo-gen', name: 'demo', generators: [{ ...blankSpec(), id: 'demo-lang', name: { ja: 'デモ', en: 'Demo' } }] });
@@ -112,7 +113,7 @@ for (const kind of ['declarative', 'custom']) {
   const read = (rel) => JSON.parse(fs.readFileSync(path.join(docs, rel), 'utf8'));
   assert.deepEqual(read('schemas/generator-definition.schema.json'), buildJsonSchema(), 'run: node scripts/export-definitions.mjs');
   assert.deepEqual(read('definitions/python.json'), def);
-  assert.deepEqual(read('definitions/vite-web.json'), toDefinition(PRESETS.viteWeb));
+  for (const spec of Object.values(PRESETS)) assert.deepEqual(read(`definitions/${spec.id}.json`), toDefinition(spec), spec.id);
   assert.deepEqual(Object.keys(buildJsonSchema().properties.statements.properties), RULE_SECTIONS.statements);
 }
 

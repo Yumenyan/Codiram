@@ -1119,6 +1119,10 @@ export function generate(project, opts = {}) {
   project.models.forEach((m) => { files[`data/${m.name}.json`] = JSON.stringify(m.rows, null, 2) + '\n'; });
   if ((project.assets || []).length) delete files['assets/.gitkeep'];
   for (const a of project.assets || []) files[`assets/${a.name}`] = dataUrlToBytes(a.data);
+  if (opts.htmlOnly) { // design only: no scripts, no data
+    files['index.html'] = files['index.html'].replace(/\s*<script src="[^"]*"><\/script>/g, '');
+    for (const n of Object.keys(files)) if (n === 'app.js' || n.startsWith('data/')) delete files[n];
+  }
   return files;
 }
 

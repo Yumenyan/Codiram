@@ -44,8 +44,20 @@ export function cliGolden(targetCfg = { type: 'rust-cli', crateName: 'golden_cli
   return { project: p, stdout: 'sum = 10\n' };
 }
 
+export function botGolden() {
+  const p = emptyProject('Golden Bot', { type: 'discord-bot', version: '0.1.0' });
+  const s = newScript(p, 'main', 'bot_on_command', { command: '!hello' });
+  s.body.push(blk('bot_reply', { text: rep('text_join', { a: '"Hello, "', b: rep('r_bot_author', {}), c: '"!"' }) }));
+  p.scripts.push(s);
+  return p;
+}
+
 /** which generators each golden project is for */
 export const GOLDEN = [
-  { id: 'web-golden', generators: [['web', () => webGolden()], ['vite-web', () => webGolden({ type: 'vite-web', version: '0.1.0' })], ['desktop', () => webGolden({ type: 'desktop', appName: 'Golden', identifier: 'com.example.golden', version: '1.0.0', width: 800, height: 600 })]] },
-  { id: 'cli-golden', generators: [['rust-cli', () => cliGolden().project], ['python', () => cliGolden({ type: 'python', version: '0.1.0' }).project]], stdout: cliGolden().stdout },
+  { id: 'web-golden', generators: [['web', () => webGolden()], ['vite-web', () => webGolden({ type: 'vite-web', version: '0.1.0' })], ['static-web', () => webGolden({ type: 'static-web', version: '0.1.0' })], ['html-css', () => webGolden({ type: 'html-css', version: '0.1.0' })], ['desktop', () => webGolden({ type: 'desktop', appName: 'Golden', identifier: 'com.example.golden', version: '1.0.0', width: 800, height: 600 })]] },
+  { id: 'bot-golden', generators: [['discord-bot', () => botGolden()]] },
+  { id: 'cli-golden', generators: [['rust-cli', () => cliGolden().project], ['python', () => cliGolden({ type: 'python', version: '0.1.0' }).project],
+    ['nodejs', () => cliGolden({ type: 'nodejs', version: '0.1.0' }).project], ['javascript', () => cliGolden({ type: 'javascript', version: '0.1.0' }).project],
+    ['typescript', () => cliGolden({ type: 'typescript', version: '0.1.0' }).project], ['godot', () => cliGolden({ type: 'godot', version: '0.1.0' }).project],
+    ['vscode-extension', () => cliGolden({ type: 'vscode-extension', version: '0.0.1', commandId: 'codiram.run', commandTitle: 'Run' }).project]], stdout: cliGolden().stdout },
 ];

@@ -98,6 +98,7 @@
         "enum": [
           "ui",
           "events",
+          "entry",
           "variables",
           "conditions",
           "loops",
@@ -114,6 +115,12 @@
           "websocket",
           "cli",
           "io",
+          "input",
+          "server",
+          "database",
+          "bot",
+          "extension",
+          "ci",
           "filesystem",
           "clipboard",
           "notification",
@@ -307,6 +314,10 @@
         "fnGlobals": {
           "type": "string",
           "description": "functions.fnGlobals"
+        },
+        "fnParam": {
+          "type": "string",
+          "description": "functions.fnParam"
         }
       },
       "additionalProperties": false
@@ -321,6 +332,34 @@
         "mainClose": {
           "type": "string",
           "description": "events.mainClose"
+        },
+        "mainIndent": {
+          "type": "string",
+          "description": "events.mainIndent"
+        },
+        "eventHandlers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "extensions": {
+      "type": "object",
+      "properties": {
+        "customStatements": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "customValues": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

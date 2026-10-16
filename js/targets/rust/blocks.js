@@ -18,7 +18,7 @@ const cliVal = (type, icon, ja, en, parts, fields, defaults, caps, irExpr, bool 
 };
 
 hat('cli_main', J('プログラムが開始されたとき', 'When the program starts'), [J('プログラムが開始されたとき', 'When the program starts')], {}, {}, () => []);
-Object.assign(blocks.get('cli_main'), { targets: CLI, portable: true, en: 'When the program starts', caps: ['cli'], irHat: () => ({ kind: 'main' }) });
+Object.assign(blocks.get('cli_main'), { targets: CLI, portable: true, en: 'When the program starts', caps: ['entry'], irHat: () => ({ kind: 'main' }) });
 
 cliStmt('cli_print', '🖨', '画面に出力', 'Print', [E('value'), J('を', 'Print'), E('nl'), J('出力', '')],
   { value: X('"Hello, world!"'), nl: sel([['1', J('改行つきで', 'with a newline')], ['0', J('改行なしで', 'without a newline')]]) }, { value: '"Hello, world!"', nl: '1' }, ['io'],
@@ -29,7 +29,7 @@ cliStmt('cli_write_file', '💾', 'ファイルに書き込む', 'Write file', [
   { path: X('"out.txt"'), text: X('"text"'), mode: sel([['write', J('上書き保存', 'overwrite')], ['append', J('末尾に追記', 'append')]]) }, { path: '"out.txt"', text: '"text"', mode: 'write' }, ['filesystem'],
   (b, c) => ({ op: 'cli.write_file', path: c.expr(b.args.path), text: c.expr(b.args.text), append: b.args.mode === 'append' }));
 
-cliVal('r_cli_input', '⌨', '入力された1行', 'Line typed by the user', [J('キーボードから入力された1行', 'a line typed on the keyboard')], {}, {}, ['io'],
+cliVal('r_cli_input', '⌨', '入力された1行', 'Line typed by the user', [J('キーボードから入力された1行', 'a line typed on the keyboard')], {}, {}, ['input'],
   () => ({ k: 'cli', fn: 'readLine', type: 'str' }));
 cliVal('r_cli_arg', '🧾', 'コマンドライン引数', 'Command-line argument', [J('コマンドライン引数', 'command-line argument'), E('n'), J('番目(1から)', '(starting at 1)')],
   { n: X('1') }, { n: '1' }, ['cli'], (b, c) => ({ k: 'cli', fn: 'arg', type: 'str', args: [c.expr(b.args.n)] }));

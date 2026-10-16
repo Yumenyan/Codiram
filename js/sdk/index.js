@@ -45,8 +45,8 @@ export function defineGenerator(spec) {
   gen.validate = (project) => {
     const cfg = targetConfig(project, gen.id) || gen.defaultConfig(project.name, project.name);
     const problems = [
-      ...validateBlocks(project, gen.id),
-      ...missingCapabilities(project, gen).map((m) => ({ msg: tf('{0} は機能「{1}」に対応していません({2})', gen.name.ja, m.capability, m.where), capability: m.capability })),
+      ...(gen.engine === 'data' ? [] : validateBlocks(project, gen.id)), // data generators work from models, not blocks
+      ...(gen.engine === 'data' ? [] : missingCapabilities(project, gen)).map((m) => ({ msg: tf('{0} は機能「{1}」に対応していません({2})', gen.name.ja, m.capability, m.where), capability: m.capability })),
       ...(spec.check ? spec.check(project, cfg) : []),
     ];
     return { ok: !problems.some((p) => p.level !== 'info'), problems };

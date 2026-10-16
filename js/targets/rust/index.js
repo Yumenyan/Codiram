@@ -82,7 +82,7 @@ defineGenerator({
   icon: '🦀',
   desc: J('Rust のコマンドラインアプリ(Cargo プロジェクト)を生成します', 'Generates a Rust command-line app (Cargo project)'),
   version: '0.1.0', language: ['rust'], platforms: ['windows', 'macos', 'linux'],
-  supports: ['variables', 'conditions', 'loops', 'functions', 'filesystem', 'cli', 'io'], // no events/ui/arrays yet
+  supports: ['variables', 'conditions', 'loops', 'functions', 'filesystem', 'cli', 'io', 'input', 'entry'], // no events/ui/arrays yet
   views: ['data', 'logic', 'output'],
   defaultConfig: defaultRustConfig,
   validateConfig: validateRustConfig,
