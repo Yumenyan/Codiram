@@ -5,11 +5,10 @@ import './blocks-extra.js';
 import './blocks-reporters.js';
 import './blocks-game.js';
 import './blocks-more.js';
-import './targets/web.js';
-import './targets/minecraft/index.js';
+import './targets/index.js';
 import { h, download, isTypingTarget, fmtDate } from './util.js';
 import { store, ui, subscribe, emit, undo, redo, jumpTo, saveNow, nav, saveAs, newProject, listProjects, openProject, setActiveTarget, commit } from './store.js';
-import { targets, activeTarget, activeTargetId } from './registry.js';
+import { targets, GeneratorRegistry, activeTarget, activeTargetId } from './registry.js';
 import { lint } from './model.js';
 import { menu, toast, dialog, promptText, confirmDlg } from './ui-kit.js';
 import { renderStart, newDialog, importFile } from './views/start.js';
@@ -124,11 +123,11 @@ function renderTopbar() {
 function targetChip() {
   const p = store.project, t = activeTarget(p);
   return h('button', { class: 'btn small target-chip', title: 'Target — 生成する実行環境', onclick: (e) => {
-    const others = [...targets.values()].filter((x) => !p.targets.some((c) => c.type === x.id));
+    const others = GeneratorRegistry.list().filter((x) => !p.targets.some((c) => c.type === x.id));
     menu(e.currentTarget, [
       ...p.targets.map((c) => { const d = targets.get(c.type); return { label: (c.type === activeTargetId(p) ? '✓ ' : '　') + d.icon + ' ' + L(d.name), onClick: () => { setActiveTarget(c.type); nav.go(viewsOf().includes(ui.view) ? ui.view : 'logic'); renderTopbar(); } }; }),
       { sep: true },
-      ...(t.configFields.length ? [{ label: 'Target Settings…', onClick: () => openTargetSettings(t.id, { onDone: () => nav.go(ui.view) }) }] : []),
+      ...(t.configFields.length || t.supports?.length ? [{ label: 'Target Settings…', onClick: () => openTargetSettings(t.id, { onDone: () => nav.go(ui.view) }) }] : []),
       ...others.map((d) => ({ label: tf('＋ {0} を追加…', d.icon + ' ' + L(d.name)), onClick: async () => { if (await openTargetSettings(d.id, { isNew: true })) { setActiveTarget(d.id); nav.go('logic'); } } })),
       ...(p.targets.length > 1 ? [{ label: 'このターゲットを削除', onClick: async () => { if (await confirmDlg('ターゲットを削除', tf('{0} の設定を削除します(ロジックは残ります / Undoで戻せます)。', L(t.name)), '削除')) { const id = t.id; commit('Remove target', (pp) => { pp.targets = pp.targets.filter((x) => x.type !== id); }); setActiveTarget(p.targets[0].type); nav.go('logic'); } } }] : []),
     ]);

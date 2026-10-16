@@ -5,6 +5,8 @@ import { dialog, toast, confirmDlg } from '../ui-kit.js';
 import { ACTIONS, bindings, setBinding, resetBindings, isCustom, comboOf } from '../shortcuts.js';
 import { PACKS, packEnabled, setPackEnabled, installPlugin, uninstallPlugin, userPlugins } from '../plugins.js';
 import { components, blocks } from '../registry.js';
+import { compatSummary } from '../sdk/validate.js';
+import { capLabel } from '../sdk/capabilities.js';
 
 export async function openShortcuts(onChange) {
   const body = h('div', {});
@@ -90,7 +92,7 @@ export async function openTargetSettings(targetId, { isNew = false, onDone } = {
     return h('label', {}, L(f.label), input);
   });
   const ok = await dialog({ title: tf('{0} — 設定', target.icon + ' ' + L(target.name)), wide: true,
-    body: h('div', { class: 'form' }, h('label', {}, 'プロジェクト名', name), ...fields, errs),
+    body: h('div', { class: 'form' }, h('label', {}, 'プロジェクト名', name), ...fields, errs, generatorInfo(target)),
     actions: [{ label: 'キャンセル', value: false }, { label: 'OK', primary: true, value: 'ok', onClick: () => {
       const probs = target.validateConfig ? target.validateConfig(cfg) : [];
       errs.textContent = probs.join(' / ');
@@ -104,4 +106,13 @@ export async function openTargetSettings(targetId, { isNew = false, onDone } = {
   });
   onDone?.();
   return true;
+}
+
+/** Manifest of a generator: version, language, platforms, capabilities and how many blocks it supports. */
+function generatorInfo(g) {
+  const { total, ok } = compatSummary(g.id);
+  return h('details', { class: 'gen-info' }, h('summary', {}, tf('Generator 情報 — {0} v{1}', L(g.name), g.version)),
+    h('div', { class: 'muted small' }, tf('言語: {0} / プラットフォーム: {1}', g.language.join(', ') || '-', g.platforms.join(', ') || '-')),
+    h('div', { class: 'muted small' }, tf('対応ブロック: {0} / {1}', ok, total)),
+    h('div', { class: 'cap-chips' }, g.supports.map((c) => h('span', { class: 'badge' }, L(capLabel(c))))));
 }

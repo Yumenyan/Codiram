@@ -6,6 +6,6 @@
   "description": "GUI-based web app development environment (no build step)",
   "scripts": {
     "start": "python3 -m http.server 8000",
-    "test": "node tests/all-blocks.test.mjs && node tests/templates.test.mjs && node tests/minecraft.test.mjs"
+    "test": "node tests/all-blocks.test.mjs && node tests/templates.test.mjs && node tests/minecraft.test.mjs && node tests/generators.test.mjs"
   }
 }

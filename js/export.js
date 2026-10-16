@@ -2,17 +2,18 @@
 import { h, download } from './util.js';
 import { bundleInline } from './generator.js';
 import { activeTarget } from './registry.js';
+import { runGenerator } from './sdk/index.js';
 import { makeZip } from './zip.js';
 import { dialog, toast } from './ui-kit.js';
 import { tf } from './i18n.js';
 
 export async function openExport(project) {
   const target = activeTarget(project);
-  const res = target.generate(project);
+  const res = runGenerator(project, target.id);
   const files = res.files;
   const blocking = res.problems.filter((p) => p.level !== 'info');
   const names = Object.keys(files);
-  let cur = names.includes('index.html') ? 'index.html' : (names.find((n) => n.endsWith('Handlers.java')) || names[0]);
+  let cur = res.entry && names.includes(res.entry) ? res.entry : names.includes('index.html') ? 'index.html' : (names.find((n) => n.endsWith('Handlers.java')) || names[0]);
   const code = h('pre', { class: 'code' });
   const list = h('div', { class: 'file-list' });
   const show = (n) => {
@@ -26,7 +27,7 @@ export async function openExport(project) {
     title: target.id === 'web' ? 'Export — 普通のWebプロジェクトとして書き出し' : 'Export — 普通のプロジェクトとして書き出し', wide: true,
     body: h('div', { class: 'export' },
       target.id === 'web' ? h('p', { class: 'muted' }, 'HTML / CSS / JavaScript / JSON のみ。特定のエディタやサービスに依存しません。ZIP を展開して index.html を開くだけで動作します。')
-        : h('p', { class: 'muted' }, '通常のプロジェクト(Gradle)として書き出します。Codiram 専用のランタイムには依存しません。README.md のビルド手順に従ってください。'),
+        : h('p', { class: 'muted' }, '通常のプロジェクトとして書き出します。Codiram 専用のランタイムには依存しません。README.md のビルド手順に従ってください。'),
       blocking.length ? h('div', { class: 'notice' }, tf('⚠ 未解決の問題が {0} 件あります(生成物が完全でない可能性): {1}', blocking.length, blocking.slice(0, 3).map((p) => p.msg).join(' / '))) : null,
       h('div', { class: 'export-grid' }, list, code)),
     actions: [

@@ -437,4 +437,53 @@ export const TEMPLATES = [
       return p;
     },
   },
+  {
+    id: 'desk_editor', target: 'desktop', name: 'Text Editor (Desktop)', desc: 'ファイルを開く/保存するテキストエディタ(デスクトップ向け。ブラウザでも動作)',
+    build() {
+      const p = emptyProject('Text Editor', { type: 'desktop', appName: 'Text Editor', identifier: 'com.example.texteditor', version: '1.0.0', width: 1000, height: 700 });
+      p.variables.push({ name: 'text', type: 'String', initial: '' });
+      const root = p.pages[0].root;
+      add(p, root, 'text', { text: 'テキストエディタ' }, { fontSize: '24', bold: true });
+      const ta = add(p, root, 'textarea', { placeholder: 'ここに入力' }, { width: '600', height: '300' });
+      const open = add(p, root, 'button', { text: '開く' }, { width: '120' });
+      const save = add(p, root, 'button', { text: '保存' }, { width: '120' });
+      const so = newScript(p, 'main', 'onClick', { target: open.id }); so.name = '開く';
+      so.body.push(blk('desk_open_file', { to: 'text' }), blk('set_value', { target: ta.id, value: 'text' }));
+      const ss = newScript(p, 'main', 'onClick', { target: save.id }); ss.name = '保存';
+      ss.body.push(blk('set_var', { name: 'text', value: rep('r_ui', { target: ta.id, kind: 'value' }) }), blk('desk_save_file', { text: 'text', name: '"memo.txt"' }), blk('desk_notify', { title: '"保存しました"', body: '"memo.txt"' }));
+      p.scripts.push(so, ss);
+      return p;
+    },
+  },
+  {
+    id: 'cli_hello', target: 'rust-cli', name: 'Hello CLI', desc: '名前を聞いてあいさつするコマンドラインアプリ(Rust)',
+    build() {
+      const p = emptyProject('Hello CLI', { type: 'rust-cli', crateName: 'hello_cli', version: '0.1.0', author: '', description: 'Hello CLI' });
+      p.variables.push({ name: 'name', type: 'String', initial: '' });
+      const s = newScript(p, 'main', 'cli_main', {}); s.name = '開始';
+      s.body.push(
+        blk('cli_print', { value: '"What is your name?"', nl: '1' }),
+        blk('set_var', { name: 'name', value: rep('r_cli_input', {}) }),
+        blk('if', { cond: cond('name', 'empty', '') }, { then: [blk('set_var', { name: 'name', value: '"world"' })], else: [] }),
+        blk('cli_print', { value: rep('text_join', { a: '"Hello, "', b: 'name', c: '"!"' }), nl: '1' }));
+      p.scripts.push(s);
+      return p;
+    },
+  },
+  {
+    id: 'cli_fizzbuzz', target: 'rust-cli', name: 'FizzBuzz', desc: '繰り返し・条件・関数・数値演算のサンプル(Rust)',
+    build() {
+      const p = emptyProject('FizzBuzz', { type: 'rust-cli', crateName: 'fizzbuzz', version: '0.1.0', author: '', description: 'FizzBuzz' });
+      p.variables.push({ name: 'i', type: 'Number', initial: '0' });
+      const f = newScript(p, 'main', 'onFunction', { name: 'show', params: 'n' }); f.name = 'show(n)';
+      f.body.push(blk('if', { cond: cond('n % 15', '==', '0') }, {
+        then: [blk('cli_print', { value: '"FizzBuzz"', nl: '1' })],
+        else: [blk('if', { cond: cond('n % 3', '==', '0') }, { then: [blk('cli_print', { value: '"Fizz"', nl: '1' })],
+          else: [blk('if', { cond: cond('n % 5', '==', '0') }, { then: [blk('cli_print', { value: '"Buzz"', nl: '1' })], else: [blk('cli_print', { value: 'n', nl: '1' })] })] })] }));
+      const s = newScript(p, 'main', 'cli_main', {}); s.name = '開始';
+      s.body.push(blk('repeat', { times: '20' }, { body: [blk('change_var', { name: 'i', by: '1' }), blk('call_fn', { name: 'show', args: 'i', to: '' })] }));
+      p.scripts.push(f, s);
+      return p;
+    },
+  },
 ];

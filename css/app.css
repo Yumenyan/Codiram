@@ -271,3 +271,6 @@ textarea.inp { width: 100%; resize: vertical; }
 @media (max-width: 1320px) { .target-chip span, .proj-btn small { display: none; } #save-status { min-width: 0; } }
 
 .recipe-grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 4px; margin-top: 6px; max-width: 520px; }
+.gen-info { margin-top: 8px; border-top: 1px solid var(--line, #ddd); padding-top: 8px; }
+.gen-info summary { cursor: pointer; font-weight: 600; }
+.cap-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

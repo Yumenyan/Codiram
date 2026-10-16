@@ -185,3 +185,16 @@ alias('値ブロックをコピーしました。入力欄を選んで Ctrl+V �
 alias('貼り付ける式の入力欄を先に選んでください', 'Select the input field to paste into first');
 alias('型', 'Variable type');
 alias('Properties パネルの表示/非表示', 'Toggle Properties panel');
+// Generator SDK / Desktop / Rust CLI
+alias('Generator 情報 — {0} v{1}', 'Generator info — {0} v{1}');
+alias('言語: {0} / プラットフォーム: {1}', 'Languages: {0} / Platforms: {1}');
+alias('対応ブロック: {0} / {1}', 'Supported blocks: {0} / {1}');
+alias('{0} は「{1}」に対応していません', '{0} does not support: {1}');
+alias('{0} は「{1}」に対応していません({2})', '{0} does not support: {1} (needs {2})');
+alias('クレート名は 小文字英字で始まり、小文字・数字・_ - のみ で指定してください', 'Crate name must start with a lowercase letter and use only a-z, 0-9, _ and -');
+alias('識別子は com.example.myapp のように小文字・数字・- を . で区切って指定してください', 'Identifier must look like com.example.myapp');
+alias('アプリ名が空です', 'App name is empty');
+alias('Hello CLI', 'Hello CLI'); alias('名前を聞いてあいさつするコマンドラインアプリ(Rust)', 'Command-line app that asks your name and greets you (Rust)');
+alias('繰り返し・条件・関数・数値演算のサンプル(Rust)', 'Loops, conditions, functions and arithmetic (Rust)');
+alias('ファイルを開く/保存するテキストエディタ(デスクトップ向け。ブラウザでも動作)', 'Text editor that opens / saves files (desktop; also works in a browser)');
+alias('プロジェクト名', 'Project name');

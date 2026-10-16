@@ -109,11 +109,11 @@ export function buildIR(project, targetId) {
   const env = () => ({ vars, scope: state.scope });
   const c = {
     state,
-    problem: (msg, block) => problems.push({ script: state.scriptId, block: block || null, msg }),
+    problem: (msg, block, unsupported) => problems.push({ script: state.scriptId, block: block || null, msg, ...(unsupported ? { unsupported: true } : {}) }),
     expr(src) {
       if (src && typeof src === 'object' && src.$b) {
         const d = blocks.get(src.$b.type);
-        if (!d || !blockSupports(d, targetId, true)) { c.problem(tf('この値ブロックは {0} では使えません', targetId), null); return { k: 'str', v: '' }; }
+        if (!d || !blockSupports(d, targetId, true)) { c.problem(tf('この値ブロックは {0} では使えません', targetId), null, true); return { k: 'str', v: '' }; }
         return d.irExpr(src.$b, c);
       }
       return parseExpr(src, env());
@@ -139,7 +139,7 @@ export function buildIR(project, targetId) {
       const out = [];
       for (const b of list) {
         const d = blocks.get(b.type);
-        if (!d || !d.ir || !blockSupports(d, targetId)) { c.problem(tf('このブロックは {0} では使えません', targetId), b.id); continue; }
+        if (!d || !d.ir || !blockSupports(d, targetId)) { c.problem(tf('このブロックは {0} では使えません', targetId), b.id, true); continue; }
         const r = d.ir(b, c);
         if (Array.isArray(r)) out.push(...r); else if (r) out.push(r);
       }

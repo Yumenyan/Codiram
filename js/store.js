@@ -1,6 +1,7 @@
 // Project store: current project, Undo/Redo history, autosave (localStorage), UI state.
 import { emptyProject, normalizeProject } from './model.js';
 import { clone, uid } from './util.js';
+import { targets } from './registry.js';
 
 const KEY_INDEX = 'codiram.projects';
 const KEY_P = 'codiram.project.';
@@ -108,7 +109,16 @@ export function openProject(id) {
 }
 
 export function newProject(template, opts) {
-  const p = template ? template.build(opts || {}) : emptyProject();
+  opts = opts || {};
+  const p = template ? template.build(opts) : emptyProject();
+  if (opts.name && opts.name.trim()) { p.name = opts.name.trim(); p.settings = { ...p.settings, title: p.name }; }
+  // a template written for one generator can be used with another one that works the same way (Web template -> Desktop)
+  const gen = opts.targetId && targets.get(opts.targetId);
+  if (gen && gen.id !== p.activeTarget) {
+    const id = String(p.name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    p.targets = [gen.defaultConfig(id || 'my_app', p.name)];
+    p.activeTarget = gen.id;
+  }
   reset(p);
   saveNow();
 }

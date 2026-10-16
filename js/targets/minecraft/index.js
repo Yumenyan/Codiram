@@ -1,6 +1,7 @@
 // Minecraft target ("Modiram"): Fabric 1.19.2 / Java 17. MVP: a handful of events and actions.
 import './blocks.js';
-import { registerTarget } from '../../registry.js';
+import { defineGenerator } from '../../sdk/index.js';
+import '../../sdk/common-ir.js';
 import { buildIR } from '../../ir.js';
 import { J } from '../../i18n-helpers.js';
 import { generateJava } from './java.js';
@@ -38,8 +39,10 @@ function generate(project, cfg) {
   return { files: fabricProject(cfg, gen, project), problems, ir, root: cfg.modId };
 }
 
-registerTarget({
-  id: 'minecraft', order: 1,
+defineGenerator({
+  id: 'minecraft', order: 9, hidden: true, portable: true, // paused: kept for existing projects; planned as a future SDK generator
+  version: '0.3.0', language: ['java'], platforms: ['minecraft-fabric'],
+  supports: ['events', 'variables', 'conditions', 'loops', 'functions', 'minecraft'],
   name: J('Minecraft Mod (Modiram)', 'Minecraft Mod (Modiram)'),
   icon: '⛏',
   desc: J('Fabric 1.19.2 の Mod(Java)を生成します', 'Generates a Fabric 1.19.2 mod (Java)'),
@@ -58,7 +61,7 @@ registerTarget({
   generate,
   lint: (project) => {
     const cfg = targetConfig(project, 'minecraft');
-    const out = buildIR(project, 'minecraft').problems.map((p) => ({ script: p.script, block: p.block, msg: p.msg }));
+    const out = buildIR(project, 'minecraft').problems.filter((p) => !p.unsupported).map((p) => ({ script: p.script, block: p.block, msg: p.msg }));
     if (cfg) validateMcConfig(cfg).forEach((msg) => out.push({ script: null, block: null, msg }));
     validateContent(project).forEach((p) => out.push({ script: null, block: null, msg: p.msg }));
     return out;

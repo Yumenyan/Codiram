@@ -16,21 +16,24 @@ python3 -m http.server 8000   # または任意の静的サーバ
 
 (ES Modules を使うため `file://` ではなく HTTP サーバ経由で開いてください。)
 
-## ターゲット(Web / Minecraft Mod)
+## ターゲット(Generator)
 
-Codiram は **Target** を選んで、同じビジュアルなロジックから別の実行環境向けの成果物を生成します。設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照。
+Codiram は **Generator** を選んで、同じビジュアルなロジックから別の実行環境向けの成果物を生成します。Core は各 Generator の中身を知らず、`defineGenerator()` で登録されたものをレジストリから使います。詳細は [docs/GENERATOR_SDK.md](docs/GENERATOR_SDK.md) / [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
-| Target | 生成物 | 画面 |
-| --- | --- | --- |
-| 🌐 Web アプリ | HTML / CSS / JavaScript(従来どおり) | Design / Data / Logic / Preview |
-| ⛏ Minecraft Mod (Modiram) | **Fabric 1.19.2 の Java プロジェクト**(`gradle build` で .jar) | Data(変数) / Logic / Output(生成コードを常時表示) |
+| Generator | 生成物 | 画面 |
+|---|---|---|
+| 🌐 Web アプリ | HTML / CSS / JavaScript | Design / Data / Logic / Preview |
+| 🖥 デスクトップ (Tauri) | Web アプリ + **Tauri 1.x プロジェクト**(ファイル選択・クリップボード・通知・ウィンドウ操作ブロック) | Design / Data / Logic / Preview |
+| 🦀 Rust CLI | **Cargo プロジェクト**(std のみ。`cargo run` で実行) | Data / Logic / Output |
 
-* New Project でターゲットを選択 → 「Minecraft Mod」なら Mod 名と Mod ID を入力
-* トップバーのターゲット表示から、切り替え・設定・**ターゲットの追加**(1プロジェクトに複数ターゲット)ができます
-* ブロックは `targets` を持ち、現在のターゲットで使えるものだけがパレットに表示されます(変数・IF・繰り返し・関数などの共通ブロックは Web と Minecraft で共用)
-* 既存(v1)のプロジェクトは Web プロジェクトとして、そのまま開けます
+* New Project でターゲットとテンプレートを選択(Web テンプレートはデスクトップでも使えます)
+* ブロックは対応 Generator と必要な Capability を持ち、現在のターゲットで使えるものだけがパレットに表示されます。非対応ブロックを使うと「Rust CLI は「ボタンがクリックされたとき」に対応していません」のように検証されます
+* 右上のターゲットチップから Target Settings(Generator 情報・対応ブロック数も表示)、ターゲットの追加・切替ができます
+* Export したプロジェクトは Codiram なしで開発・ビルドできる普通のプロジェクトです
 
-### Minecraft Mod を作る(最初の成功ルート)
+> Minecraft Mod Generator(Modiram)は **一時停止中** です。コードは残してあり既存の Minecraft プロジェクトは開けますが、新規作成の選択肢には出ません。将来 Generator SDK 上の Generator として再開する予定です(MCreator など成熟したツールを当面は利用)。
+
+### (保留中)Minecraft Mod の最初の成功ルート
 
 1. New Project → **Minecraft Mod** → テンプレート *Hello Minecraft*(Mod ID を入力)
 2. Logic: 「プレイヤーが参加したとき」→「メッセージを送る "Hello Minecraft!"」

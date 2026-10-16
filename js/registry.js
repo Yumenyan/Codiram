@@ -11,26 +11,47 @@ export const registerComponent = (def) => components.set(def.type, def);
 /** Every block declares which targets it can be used for ('web', 'minecraft', …). Default: web only. */
 export const registerBlock = (def) => { def.targets = def.targets || ['web']; blocks.set(def.type, def); };
 /**
- * Can this block be used for the target? The Web target generates straight from blocks; other targets go through the IR,
- * so the block needs an `ir` (command), `irHat` (event) or `irExpr` (value block, asValue=true) implementation.
+ * Can this block be used for the generator `targetId`?
+ *  1. the block lists the generator in `targets`, or is `portable` and the generator accepts portable blocks,
+ *     or the generator `inherits` another generator's blocks (Desktop = Web blocks + desktop blocks);
+ *  2. every capability the block needs (`caps`, default: by category) is offered by the generator (`supports`);
+ *  3. generators that work from the IR (engine 'ir') also need an `ir` / `irHat` / `irExpr` implementation.
  */
 export function blockSupports(def, targetId, asValue = false) {
-  if (!def || !(def.targets || ['web']).includes(targetId)) return false;
-  if (targetId === 'web') return true;
+  if (!def) return false;
+  const gen = targets.get(targetId);
+  const listed = (def.targets || ['web']).includes(targetId);
+  const inherited = !!gen?.inherits && blockSupports(def, gen.inherits, asValue);
+  if (!listed && !inherited && !(def.portable && gen?.portable)) return false;
+  if (gen?.supports && !blockCaps(def).every((c) => gen.supports.includes(c))) return false;
+  if (targetId === 'web' || gen?.engine === 'blocks') return true;
   return asValue ? !!def.irExpr : def.kind === 'hat' ? !!def.irHat : def.kind === 'reporter' ? false : !!def.ir;
 }
 
+/** Capabilities a block needs. Explicit `def.caps` wins; otherwise they follow from its category. Common blocks need none. */
+const CAT_CAPS = { UI: ['ui'], Draw: ['canvas'], Sound: ['audio'], Game: ['game'], Animation: ['animation'], Data: ['data'], Minecraft: ['minecraft'] };
+export const blockCaps = (def) => def.caps || CAT_CAPS[def.cat] || [];
+
 /**
- * Targets (execution environments Codiram can generate for). See docs/ARCHITECTURE.md.
- * { id, name:{ja,en}, icon, desc, views:[...], configFields:[...], defaultConfig(), generate(project, cfg) -> { files, problems }, lint?(project) }
+ * Generators (execution environments / languages Codiram can generate for). See docs/GENERATOR_SDK.md.
+ * Use `defineGenerator()` from js/sdk to build one; the registry only needs { id, name, ... generate }.
  */
 export const targets = new Map();
-export const registerTarget = (def) => {
-  targets.set(def.id, def);
-  const sorted = [...targets.values()].sort((a, b) => (a.order ?? 9) - (b.order ?? 9));
-  targets.clear();
-  sorted.forEach((t) => targets.set(t.id, t));
+export const GeneratorRegistry = {
+  register(def) {
+    targets.set(def.id, def);
+    const sorted = [...targets.values()].sort((a, b) => (a.order ?? 9) - (b.order ?? 9));
+    targets.clear();
+    sorted.forEach((t) => targets.set(t.id, t));
+    return def;
+  },
+  unregister: (id) => targets.delete(id),
+  get: (id) => targets.get(id),
+  /** hidden/paused generators are only listed on request (they still work for projects that already use them) */
+  list: ({ includeHidden = false } = {}) => [...targets.values()].filter((t) => includeHidden || !t.hidden),
+  findByCapability: (cap) => [...targets.values()].filter((t) => (t.supports || []).includes(cap)),
 };
+export const registerTarget = (def) => GeneratorRegistry.register(def);
 export const activeTargetId = (project) => project?.activeTarget || project?.targets?.[0]?.type || 'web';
 export const activeTarget = (project) => targets.get(activeTargetId(project));
 export const registerExporter = (def) => exporters.set(def.id, def);

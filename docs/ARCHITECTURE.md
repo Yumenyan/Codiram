@@ -137,3 +137,8 @@ Plugin / Generator SDK は `registerTarget()` / `registerBlock()` / `registerPlu
 - Content (`content.js`, `views/content.js`): Items / Blocks / Recipes → `ModContent.java`, JSON models, lang, recipes, generated PNG textures (`png.js`).
 - Not yet: Tags, Loot Tables UI, GUI, more events.
 - Known issue: Gradle `:downloadAssets` can fail on flaky networks to resources.download.minecraft.net. Generated README has troubleshooting; `gradle.properties` no longer enables parallel builds and has commented proxy settings.
+
+## Generator SDK (current direction)
+Minecraft development is paused (generator hidden, code kept). The platform work continues in `js/sdk/` — see
+[GENERATOR_SDK.md](GENERATOR_SDK.md): GeneratorRegistry, capabilities, block compatibility, validation, and the first
+generators Web (migrated), Desktop (Tauri) and Rust CLI.
