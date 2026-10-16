@@ -6,6 +6,7 @@ import { J } from '../../i18n-helpers.js';
 import { generateJava } from './java.js';
 import { fabricProject, MC_VERSIONS, DEFAULT_MC_VERSION } from './project.js';
 import { targetConfig } from '../../model.js';
+import { validateContent } from './content.js';
 
 const MOD_ID = /^[a-z][a-z0-9_]{1,63}$/;
 const PACKAGE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
@@ -30,6 +31,7 @@ function generate(project, cfg) {
   const ir = buildIR(project, 'minecraft');
   const problems = [...ir.problems];
   validateMcConfig(cfg).forEach((msg) => problems.push({ msg, config: true }));
+  problems.push(...validateContent(project));
   const gen = generateJava(ir, cfg);
   problems.push(...gen.problems);
   if (project.models.length) problems.push({ msg: 'データモデルはまだ Minecraft では使えません(変数のみ対応)', level: 'info' });
@@ -58,6 +60,7 @@ registerTarget({
     const cfg = targetConfig(project, 'minecraft');
     const out = buildIR(project, 'minecraft').problems.map((p) => ({ script: p.script, block: p.block, msg: p.msg }));
     if (cfg) validateMcConfig(cfg).forEach((msg) => out.push({ script: null, block: null, msg }));
+    validateContent(project).forEach((p) => out.push({ script: null, block: null, msg: p.msg }));
     return out;
   },
 });

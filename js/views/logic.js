@@ -5,7 +5,8 @@ import { COND_OPS, defaultCond } from '../blocks.js';
 import { store, ui, commit, nav } from '../store.js';
 import { allNodes, newBlock, newScript, scriptTitle, findBlock, walkBlocks, freshBlockClone, fnNames, lint, findNode, scriptsFor, defaultInitial } from '../model.js';
 import { blockSupports, activeTargetId, activeTarget } from '../registry.js';
-import { ITEMS, BLOCKS, SOUNDS } from '../targets/minecraft/ids.js';
+import { contentIds } from '../targets/minecraft/content.js';
+import { ITEMS, BLOCKS, SOUNDS, ENTITIES, EFFECTS } from '../targets/minecraft/ids.js';
 import { components } from '../registry.js';
 import { promptText, menu, toast, confirmDlg, promptVariable } from '../ui-kit.js';
 import { L, getLang, isBi, tf } from '../i18n.js';
@@ -48,9 +49,10 @@ function fillNames() {
     .forEach((n) => els.names.append(h('option', { value: n })));
   root.querySelectorAll('datalist[id^=dl-mc]').forEach((x) => x.remove());
   if (activeTargetId(p) === 'minecraft') {
-    for (const [id, list] of [['dl-mc-items', ITEMS], ['dl-mc-blocks', BLOCKS], ['dl-mc-sounds', SOUNDS]]) {
+    for (const [id, list] of [['dl-mc-items', ITEMS], ['dl-mc-blocks', BLOCKS], ['dl-mc-sounds', SOUNDS], ['dl-mc-entities', ENTITIES], ['dl-mc-effects', EFFECTS]]) {
       const dl = h('datalist', { id });
-      list.forEach((n) => dl.append(h('option', { value: n })));
+      const mod = (p.targets.find((t) => t.type === 'minecraft') || {}).modId, own = id === 'dl-mc-items' ? contentIds(p, mod).items : id === 'dl-mc-blocks' ? contentIds(p, mod).blocks : [];
+      [...own, ...list].forEach((n) => dl.append(h('option', { value: n })));
       els.names.parentElement.append(dl);
     }
   }

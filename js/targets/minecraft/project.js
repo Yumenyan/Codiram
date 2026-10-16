@@ -1,5 +1,6 @@
 // Fabric project skeleton (Minecraft 1.19.2). Versions are pinned in one table so they are easy to update.
 import { javaIdent, pascal } from './java.js';
+import { generateContent } from './content.js';
 
 export const MC_VERSIONS = {
   '1.19.2': { yarn: '1.19.2+build.28', loader: '0.14.21', fabricApi: '0.77.0+1.19.2', loom: '1.1-SNAPSHOT', java: 17, gradle: '7.6.4' },
@@ -10,9 +11,15 @@ export const className = (cfg) => pascal(cfg.modName || cfg.modId);
 
 const RUNTIME = (cfg) => `package ${cfg.package};
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.effect.StatusEffect;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.World;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.server.MinecraftServer;
@@ -40,10 +47,15 @@ public final class Cx {
 
     private static final List<Pending> pending = new ArrayList<>();
 
+    /** The running server (set while a server is started); used by functions called from events without a player. */
+    public static MinecraftServer server;
+
     private Cx() {}
 
     /** Registers the tick listener that runs delayed actions. */
     static void init() {
+        ServerLifecycleEvents.SERVER_STARTED.register(s -> server = s);
+        ServerLifecycleEvents.SERVER_STOPPED.register(s -> server = null);
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             List<Pending> due = new ArrayList<>();
             for (Pending p : pending) {
@@ -97,6 +109,30 @@ public final class Cx {
         return min + Math.floor(Math.random() * (max - min + 1));
     }
 
+    /** Command text without the leading slash. */
+    public static String cmd(String text) {
+        String t = text.trim();
+        return t.startsWith("/") ? t.substring(1) : t;
+    }
+
+    public static ServerWorld overworld(MinecraftServer s) { return s == null ? null : s.getOverworld(); }
+
+    /** Returns null when the effect id does not exist. */
+    public static StatusEffect effect(String id) {
+        Identifier identifier = Identifier.tryParse(id);
+        return identifier == null ? null : Registry.STATUS_EFFECT.get(identifier);
+    }
+
+    /** Spawns an entity of the given type id; unknown ids are ignored. */
+    public static void spawn(World world, String id, double x, double y, double z) {
+        Identifier identifier = Identifier.tryParse(id);
+        if (world == null || identifier == null || !Registry.ENTITY_TYPE.containsId(identifier)) return;
+        Entity entity = Registry.ENTITY_TYPE.get(identifier).create(world);
+        if (entity == null) return;
+        entity.refreshPositionAndAngles(x, y, z, 0.0f, 0.0f);
+        world.spawnEntity(entity);
+    }
+
     public static Item item(String id) {
         Identifier identifier = Identifier.tryParse(id);
         return identifier == null ? Items.AIR : Registry.ITEM.get(identifier);
@@ -135,7 +171,13 @@ export function fabricProject(cfg, gen, project) {
 rootProject.name = '${cfg.modId}'
 `;
   files['gradle.properties'] = `org.gradle.jvmargs=-Xmx1G
-org.gradle.parallel=true
+
+# Behind a proxy / firewall / VPN? Fabric Loom downloads Minecraft's libraries and assets on first use.
+# If a download fails, uncomment and fill in your proxy, then run the build again (finished downloads are cached):
+# systemProp.http.proxyHost=
+# systemProp.http.proxyPort=
+# systemProp.https.proxyHost=
+# systemProp.https.proxyPort=
 
 # Fabric properties (see https://fabricmc.net/develop)
 minecraft_version=${cfg.minecraftVersion}
@@ -222,6 +264,7 @@ public class ${cls} implements ModInitializer {
     @Override
     public void onInitialize() {
         Cx.init();
+        ModContent.init();
         Handlers.register();
         Custom.init();
         Cx.LOGGER.info("${cfg.modName.replace(/"/g, '')} loaded");
@@ -242,6 +285,9 @@ public final class Custom {
     }
 }
 `;
+  const content = generateContent(project, cfg);
+  files[`${dir}/ModContent.java`] = content.java;
+  Object.assign(files, content.files);
   files[`${dir}/Handlers.java`] = gen.handlers;
   files[`${dir}/Vars.java`] = gen.vars;
   files[`${dir}/Cx.java`] = RUNTIME(cfg);
@@ -257,10 +303,21 @@ Requirements: **JDK ${v.java}** and **Gradle ${v.gradle}** (Fabric Loom ${v.loom
 \`\`\`bash
 gradle wrapper --gradle-version ${v.gradle}   # once: creates ./gradlew
 ./gradlew build                                 # -> build/libs/${cfg.modId}-${cfg.modVersion}.jar
-./gradlew runServer                             # or runClient: start Minecraft with the mod
 \`\`\`
 
-Put the built \`.jar\` into the \`mods\` folder of a Minecraft ${cfg.minecraftVersion} installation that has **Fabric Loader** and **Fabric API** (${v.fabricApi}).
+Put the built \`.jar\` (not the \`-sources\` one) into the \`mods\` folder of a Minecraft ${cfg.minecraftVersion} installation that has **Fabric Loader** and **Fabric API** (${v.fabricApi}).
+That is the recommended way to try the mod: \`./gradlew build\` only needs Minecraft's libraries, **not** its game assets.
+
+### Troubleshooting
+
+* \`Task :downloadAssets FAILED … Failed to download … resources.download.minecraft.net\`
+  — this task only runs for **\`runClient\`** and when an IDE (IntelliJ / VS Code) imports the project. It downloads ~3000 small game-asset files and aborts on the
+  first network error (the long \`InterruptedException\` stack traces are just the other downloads being cancelled; the first error above them is the real cause).
+  1. Run it again — files that were already downloaded are cached, so it continues where it stopped (\`./gradlew runClient\`).
+  2. Check VPN / proxy / firewall / DNS access to \`resources.download.minecraft.net\`; if you use a proxy, fill in the \`systemProp.*\` lines in \`gradle.properties\`.
+  3. Skip it: build the jar with \`./gradlew build\` and test it with the normal Minecraft launcher (Fabric profile).
+* \`Could not find …\` / plugin not found — Fabric's Maven (\`maven.fabricmc.net\`) must be reachable.
+* Unsupported class file / Gradle errors — use **JDK ${v.java}** and Gradle **${v.gradle}** (see \`gradle wrapper\` above); newer Gradle versions do not work with Loom ${v.loom}.
 
 ## Files
 
@@ -269,6 +326,7 @@ Put the built \`.jar\` into the \`mods\` folder of a Minecraft ${cfg.minecraftVe
 | \`${dir}/${className(cfg)}.java\` | Mod entry point |
 | \`${dir}/Handlers.java\` | Event handlers + functions generated from your Logic blocks |
 | \`${dir}/Vars.java\` | Global variables |
+| \`${dir}/ModContent.java\` | Items / blocks defined in Codiram (+ JSON / PNG under \`src/main/resources\`) |
 | \`${dir}/Cx.java\` | Small runtime (conversions, "Wait", id lookups) |
 | \`${dir}/Custom.java\` | Your own code (not regenerated by hand) |
 | \`src/main/resources/fabric.mod.json\` | Mod metadata |

@@ -13,6 +13,7 @@ import { TEMPLATES } from '../js/templates.js';
 import { emptyProject, normalizeProject, newScript, newBlock, lint } from '../js/model.js';
 import { blocks, blockSupports } from '../js/registry.js';
 import { defaultMcConfig } from '../js/targets/minecraft/index.js';
+import { EVENTS, eventHas } from '../js/targets/minecraft/events.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const mc = targets.get('minecraft');
@@ -44,11 +45,16 @@ function everyBlockProject() {
   p.scripts.push(fn);
   const stmts = [...blocks.values()].filter((d) => d.kind === 'stmt' && blockSupports(d, 'minecraft') && d.type !== 'wait' && d.type !== 'call_fn' && d.type !== 'note');
   const hats = [...blocks.values()].filter((d) => d.kind === 'hat' && blockSupports(d, 'minecraft') && d.type !== 'onFunction');
+  const hatEvent = (h) => { const probe = newScript(p, 'main', h.type, {}); return h.irHat({ id: 'x', args: probe.hat.args }, { state: {}, problem() {} }).event; };
   for (const h of hats) {
     const s = newScript(p, 'main', h.type, {});
-    for (const d of stmts) {
+    const ev = hatEvent(h);
+    const hasPlayer = eventHas(ev, 'player');
+    for (const d of (hasPlayer ? stmts : stmts.filter((x) => !x.type.startsWith('mc_') || ['mc_send_message', 'mc_run_command'].includes(x.type)))) {
       const b = fill(newBlock(d.type, {}));
-      if (d.type === 'mc_set_block' && !['mc_on_right_click', 'mc_on_block_break', 'mc_on_block_place'].includes(h.type)) b.args.mode = 'relative';
+      if (d.type === 'mc_set_block' && !eventHas(ev, 'block')) b.args.mode = 'relative';
+      if (!hasPlayer && d.type === 'mc_send_message') b.args.to = 'all';
+      if (!hasPlayer && d.type === 'mc_run_command') b.args.as = 'server';
       for (const sl of Object.keys(b.slots)) b.slots[sl].push(fill(newBlock('set_var', { name: 's', value: '"a"' })));
       s.body.push(b);
     }
@@ -56,10 +62,12 @@ function everyBlockProject() {
     // every value block inside one message
     const reps = [...blocks.values()].filter((d) => (d.kind === 'reporter' || d.reporter) && blockSupports(d, 'minecraft', true));
     for (const r of reps) {
-      if (['r_mc_block_id', 'r_mc_block_pos'].includes(r.type) && !['mc_on_right_click', 'mc_on_block_break', 'mc_on_block_place'].includes(h.type)) continue;
+      if (['r_mc_block_id', 'r_mc_block_pos'].includes(r.type) && !eventHas(ev, 'block')) continue;
+      if (r.type === 'r_mc_entity_id' && !eventHas(ev, 'entity')) continue;
+      if (r.type.includes('mc_') && !['r_mc_players', 'r_mc_block_id', 'r_mc_block_pos', 'r_mc_entity_id'].includes(r.type) && !hasPlayer) continue;
       const rb = fill({ id: 'r', type: r.type, args: { ...(r.defaults || {}) } });
       if (r.type === 'r_var') rb.args.name = 'n';
-      s.body.push(newBlock('mc_send_message', { to: 'player', text: { $b: rb } }));
+      s.body.push(newBlock('mc_send_message', { to: hasPlayer ? 'player' : 'all', text: { $b: rb } }));
     }
     s.body.push(newBlock('wait', { ms: '500' }), newBlock('mc_send_message', { to: 'all', text: '"done"' }));
     p.scripts.push(s);
@@ -77,6 +85,11 @@ for (const t of [...TEMPLATES.filter((x) => x.target === 'minecraft'), everythin
   assert.deepEqual(r.problems.filter((x) => x.level !== 'info'), [], `${t.id}: generator problems`);
   for (const f of ['build.gradle', 'gradle.properties', 'settings.gradle', 'src/main/resources/fabric.mod.json', 'README.md']) assert.ok(r.files[f], `${t.id}: missing ${f}`);
   JSON.parse(r.files['src/main/resources/fabric.mod.json']);
+  if (t.id === 'mc_ruby') {
+    for (const f of Object.keys(r.files).filter((x) => x.endsWith('.json') && !x.endsWith('codiram.project.json'))) JSON.parse(r.files[f]);
+    for (const f of Object.keys(r.files).filter((x) => x.endsWith('.png'))) assert.deepEqual([...r.files[f].slice(0, 4)], [137, 80, 78, 71], `${f} must be a PNG`);
+    for (const f of ['ModContent.java', 'textures/item/ruby.png', 'textures/block/ruby_block.png', 'models/item/ruby.json', 'blockstates/ruby_block.json', 'lang/en_us.json', 'recipes/ruby_block_from_rubies.json', 'loot_tables/blocks/ruby_block.json']) assert.ok(Object.keys(r.files).some((x) => x.endsWith(f)), `missing ${f}`);
+  }
   const dir = path.join(tmp, t.id);
   for (const [f, c] of Object.entries(r.files)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), c); }
   const javaFiles = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? javaFiles(path.join(d, e.name)) : e.name.endsWith('.java') ? [path.join(d, e.name)] : []));

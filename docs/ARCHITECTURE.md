@@ -131,3 +131,9 @@ IR 式:  { k:'num'|'str'|'bool'|'var'|'bin'|'un'|'call'|'<target>' , … }
 | API / WebSocket 連携(Phase 4)→ Server(Phase 5)→ Web 強化 → Desktop → CLI/Bot → Game → IoT → Plugin SDK | ⏳ |
 
 Plugin / Generator SDK は `registerTarget()` / `registerBlock()` / `registerPlugin()` が土台です。
+
+## Phase 3 (Minecraft) status
+- Events (`targets/minecraft/events.js`), player/world actions and reporters (`blocks.js`).
+- Content (`content.js`, `views/content.js`): Items / Blocks / Recipes → `ModContent.java`, JSON models, lang, recipes, generated PNG textures (`png.js`).
+- Not yet: Tags, Loot Tables UI, GUI, more events.
+- Known issue: Gradle `:downloadAssets` can fail on flaky networks to resources.download.minecraft.net. Generated README has troubleshooting; `gradle.properties` no longer enables parallel builds and has commented proxy settings.

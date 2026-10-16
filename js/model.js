@@ -25,6 +25,7 @@ export function emptyProject(name = 'Untitled Project', targetCfg = { type: 'web
     settings: { title: name },
     pages: [newPage('Main', 'main')],
     models: [], variables: [], scripts: [], assets: [],
+    content: { items: [], blocks: [], recipes: [] },
   };
 }
 
@@ -34,6 +35,7 @@ export function normalizeProject(p) {
   if (!p.activeTarget || !p.targets.some((t) => t.type === p.activeTarget)) p.activeTarget = p.targets[0].type;
   p.version = PROJECT_VERSION;
   p.assets = p.assets || [];
+  p.content = p.content || { items: [], blocks: [], recipes: [] };
   p.settings = p.settings || {};
   p.variables = p.variables || [];
   return p;

@@ -6,7 +6,8 @@ import { FIELD_TYPES, VAR_TYPES, newModel, nextRowId, defaultFor, walkBlocks, al
 import { dialog, confirmDlg, toast } from '../ui-kit.js';
 import { tf } from '../i18n.js';
 import { download } from '../util.js';
-import { activeTarget } from '../registry.js';
+import { activeTarget, activeTargetId } from '../registry.js';
+import { contentEditor } from './content.js';
 
 const proj = () => store.project;
 let root;
@@ -17,7 +18,8 @@ export function renderData(container, origin) {
   root.className = 'view data';
   root.textContent = '';
   const p = proj();
-  if (ui.selModel !== '__vars' && ui.selModel !== '__assets' && !p.models.some((m) => m.id === ui.selModel)) ui.selModel = p.models[0]?.id || '__vars';
+  const CONTENT = ['__items', '__blocks', '__recipes'];
+  if (ui.selModel !== '__vars' && ui.selModel !== '__assets' && !CONTENT.includes(ui.selModel) && !p.models.some((m) => m.id === ui.selModel)) ui.selModel = p.models[0]?.id || '__vars';
 
   const left = h('aside', { class: 'panel left' },
     h('div', { class: 'panel-title' }, 'Models'),
@@ -28,11 +30,14 @@ export function renderData(container, origin) {
       h('div', { class: 'panel-title' }, 'Variables'),
       h('div', { class: 'layer' + (ui.selModel === '__vars' ? ' on' : ''), onclick: () => { ui.selModel = '__vars'; renderData(root); } },
         h('span', { class: 'pal-ico' }, '𝑥'), h('span', {}, 'App variables'), h('em', {}, p.variables.length + '')),
+      activeTargetId(p) === 'minecraft' ? h('div', {}, h('div', { class: 'panel-title' }, 'Content'),
+        [['__items', '🧪', 'Items', p.content.items.length], ['__blocks', '🧱', 'Blocks', p.content.blocks.length], ['__recipes', '📖', 'Recipes', p.content.recipes.length]].map(([id, ic, name, n]) =>
+          h('div', { class: 'layer' + (ui.selModel === id ? ' on' : ''), onclick: () => { ui.selModel = id; renderData(root); } }, h('span', { class: 'pal-ico' }, ic), h('span', {}, name), h('em', {}, n + '')))) : null,
       h('div', { class: 'panel-title' }, 'Assets'),
       h('div', { class: 'layer' + (ui.selModel === '__assets' ? ' on' : ''), onclick: () => { ui.selModel = '__assets'; renderData(root); } },
         h('span', { class: 'pal-ico' }, '🗂'), h('span', {}, 'Images & audio'), h('em', {}, (p.assets || []).length + ''))));
   const noUi = !activeTarget(p).views.includes('design');
-  const main = h('section', { class: 'center scroll data-main' }, noUi ? h('div', { class: 'notice' }, 'このターゲットでは「変数」のみ使えます(データモデル・アセットは Web ターゲット向けです)。') : null, ui.selModel === '__vars' ? varsEditor() : ui.selModel === '__assets' ? assetsEditor() : modelEditor(p.models.find((m) => m.id === ui.selModel)));
+  const main = h('section', { class: 'center scroll data-main' }, noUi ? h('div', { class: 'notice' }, 'このターゲットでは「変数」と「Content(アイテム・ブロック・レシピ)」を使えます(データモデルは Web ターゲット向けです。画像はテクスチャとして使えます)。') : null, ui.selModel === '__vars' ? varsEditor() : CONTENT.includes(ui.selModel) ? contentEditor(ui.selModel.slice(2)) : ui.selModel === '__assets' ? assetsEditor() : modelEditor(p.models.find((m) => m.id === ui.selModel)));
   root.append(left, main);
 }
 

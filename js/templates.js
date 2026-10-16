@@ -413,4 +413,28 @@ export const TEMPLATES = [
       return p;
     },
   },
+  {
+    id: 'mc_ruby', target: 'minecraft', name: 'Ruby Mod', desc: '新しいアイテム・ブロック・レシピを追加(テクスチャも自動生成)+ ルビーを持って右クリックで効果',
+    build(opts = {}) {
+      const p = emptyProject(opts.modName || 'Ruby Mod', { ...defaultMcConfig(opts.modId || 'ruby_mod', opts.modName || 'Ruby Mod'), ...(opts.config || {}) });
+      const mod = p.targets[0].modId;
+      p.content.items.push(
+        { id: 'ruby', name: 'Ruby', maxStack: 64, hunger: 0, saturation: 0.3, color: '#e0115f', texture: '' },
+        { id: 'ruby_apple', name: 'Ruby Apple', maxStack: 64, hunger: 6, saturation: 0.8, color: '#ff4d6d', texture: '' });
+      p.content.blocks.push({ id: 'ruby_block', name: 'Block of Ruby', material: 'METAL', hardness: 3, resistance: 6, light: 4, color: '#e0115f', texture: '' });
+      p.content.recipes.push(
+        { id: 'ruby_block_from_rubies', kind: 'shaped', result: 'ruby_block', count: 1, grid: Array(9).fill('ruby'), ingredients: '', ingredient: '', xp: 0, time: 200 },
+        { id: 'rubies_from_block', kind: 'shapeless', result: 'ruby', count: 9, grid: Array(9).fill(''), ingredients: 'ruby_block', ingredient: '', xp: 0, time: 200 },
+        { id: 'ruby_apple', kind: 'shaped', result: 'ruby_apple', count: 1, grid: ['', 'ruby', '', 'ruby', 'minecraft:apple', 'ruby', '', 'ruby', ''], ingredients: '', ingredient: '', xp: 0, time: 200 },
+        { id: 'ruby_from_redstone', kind: 'smelting', result: 'ruby', count: 1, grid: Array(9).fill(''), ingredients: '', ingredient: 'minecraft:redstone_block', xp: 1, time: 200 });
+      const join = newScript(p, 'main', 'mc_on_join', {}); join.name = '参加時';
+      join.body.push(blk('mc_give_item', { item: `${mod}:ruby`, count: '3' }), blk('mc_send_message', { to: 'player', where: 'chat', text: '"ルビーを3個プレゼント!"' }));
+      const use = newScript(p, 'main', 'mc_on_item_use', {}); use.name = 'ルビーを使った';
+      use.body.push(blk('if', { cond: cond(rep('r_mc_held_item', {}), '==', `"${mod}:ruby"`) }, { then: [
+        blk('mc_effect', { effect: 'minecraft:regeneration', secs: '10', amp: '1' }), blk('mc_remove_item', { item: `${mod}:ruby`, count: '1' }),
+        blk('mc_play_sound', { sound: 'minecraft:entity.player.levelup', volume: '1', pitch: '1' }), blk('mc_send_message', { to: 'player', where: 'actionbar', text: '"ルビーのちから!"' })], else: [] }));
+      p.scripts.push(join, use);
+      return p;
+    },
+  },
 ];
