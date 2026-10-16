@@ -1,5 +1,5 @@
 // Project store: current project, Undo/Redo history, autosave (localStorage), UI state.
-import { emptyProject } from './model.js';
+import { emptyProject, normalizeProject } from './model.js';
 import { clone, uid } from './util.js';
 
 const KEY_INDEX = 'codiram.projects';
@@ -102,7 +102,7 @@ function reset(project) {
 export function openProject(id) {
   const raw = localStorage.getItem(KEY_P + id);
   if (!raw) return false;
-  reset(JSON.parse(raw));
+  reset(normalizeProject(JSON.parse(raw)));
   store.status = 'saved';
   return true;
 }
@@ -124,6 +124,7 @@ export function saveAs(name) {
 export function importProject(json) {
   const p = typeof json === 'string' ? JSON.parse(json) : json;
   if (!p.pages || !p.models || !p.scripts) throw new Error('Codiramのプロジェクトファイルではありません');
+  normalizeProject(p);
   p.id = uid('p'); p.updated = Date.now();
   reset(p);
   saveNow();

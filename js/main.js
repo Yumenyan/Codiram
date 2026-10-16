@@ -2,6 +2,8 @@
 import './components.js';
 import './blocks.js';
 import './blocks-extra.js';
+import './blocks-reporters.js';
+import './blocks-game.js';
 import { h, download, isTypingTarget, fmtDate } from './util.js';
 import { store, ui, subscribe, emit, undo, redo, jumpTo, saveNow, nav, saveAs, newProject, listProjects, openProject } from './store.js';
 import { lint } from './model.js';

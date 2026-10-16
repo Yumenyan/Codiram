@@ -9,7 +9,7 @@ const ttl = (t) => (typeof t === 'object' ? { title: t.ja, en: t.en } : { title:
 
 export const COND_OPS = [
   ['==', '＝'], ['!=', '≠'], ['>', '＞'], ['<', '＜'], ['>=', '≧'], ['<=', '≦'],
-  ['contains', J('含む', 'contains')], ['empty', J('空', 'is empty')], ['notempty', J('空でない', 'is not empty')], ['js', J('式(JS)', 'JS expression')],
+  ['true', J('が真', 'is true')], ['contains', J('含む', 'contains')], ['empty', J('空', 'is empty')], ['notempty', J('空でない', 'is not empty')], ['js', J('式(JS)', 'JS expression')],
 ];
 export const defaultCond = () => ({ rows: [{ l: '', op: '==', r: '' }], join: 'and', not: false });
 

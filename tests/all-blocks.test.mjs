@@ -20,19 +20,23 @@ const fill = (b) => {
     else if (f.t==='text' && !b.args[k]) b.args[k]='x';
     else if (f.t==='select') b.args[k] = Array.isArray(f.opts[0]) ? f.opts[0][0] : f.opts[0];
   }
-  Object.values(b.slots).forEach(()=>{});
 };
 let n=0;
 const fnScript = newScript(p,'main','onFunction',{name:'f1'}); p.scripts.push(fnScript);
 for (const [type,def] of blocks) {
   let s;
-  if (def.kind==='hat') { const h=newBlock(type); fill(h); s = newScript(p,'main',type,h.args); }
+  if (def.kind==='reporter') { const r = newBlock(type); r.args = { ...r.args }; const rb = { id:'r1', type, args: r.args }; fill(rb);
+    s = newScript(p,'main','onClick',{target:btn.id}); s.body.push(newBlock('set_var',{name:'v1',value:{$b:rb}}));
+    // also derived value blocks of statement-style blocks (checked below)
+  }
+  else if (def.kind==='hat') { const h=newBlock(type); fill(h); s = newScript(p,'main',type,h.args); }
   else { s = newScript(p,'main','onClick',{target:btn.id}); const b=newBlock(type); fill(b);
     // loops: also test break inside
     s.body.push(b);
     for (const sl of Object.keys(b.slots)) b.slots[sl].push(newBlock('break'), newBlock('set_var',{name:'v1',value:'1'}));
   }
   p.scripts.push(s); n++;
+  if (def.kind!=='hat' && def.kind!=='reporter' && def.reporter) { const rb={id:'r2',type,args:{...newBlock(type).args}}; fill(rb); const s2=newScript(p,'main','onClick',{target:btn.id}); s2.body.push(newBlock('set_var',{name:'v1',value:{$b:rb}})); p.scripts.push(s2); n++; }
 }
 const f = generate(p, {debug:true});
 import assert from 'node:assert/strict';

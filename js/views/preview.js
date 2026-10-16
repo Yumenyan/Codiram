@@ -14,6 +14,7 @@ export function renderPreview(container) {
   root.textContent = '';
   frame = h('iframe', { class: 'frame', title: 'Preview', sandbox: 'allow-scripts allow-modals' });
   errBox = h('div', { class: 'errbox' });
+  frame.addEventListener('load', () => { try { frame.contentWindow.focus(); } catch { /* ignore */ } }); // so keyboard games work immediately
   root.append(
     h('div', { class: 'toolbar' },
       h('b', {}, 'Preview'),
@@ -35,7 +36,7 @@ export function run() {
   if (!frame) return;
   ui.errors = [];
   const files = generate(store.project, { debug: true, persist: false });
-  frame.srcdoc = bundleInline(files, { debug: true });
+  frame.srcdoc = bundleInline(files, { debug: true, assets: store.project.assets });
   running = true;
   sizeFrame();
   renderErrors();

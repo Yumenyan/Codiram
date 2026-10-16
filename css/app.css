@@ -49,6 +49,8 @@ textarea.inp { width: 100%; resize: vertical; }
 .view.hide-left { grid-template-columns: 0 minmax(0, 1fr) 290px; } .view.hide-right { grid-template-columns: 250px minmax(0, 1fr) 0; }
 .view.hide-left.hide-right { grid-template-columns: 0 minmax(0, 1fr) 0; }
 .view.hide-left > .left, .view.hide-right > .right { display: none; }
+/* keep columns fixed even when a side panel is hidden (otherwise the centre collapses into the 0-width column) */
+.view > .left { grid-column: 1; } .view > .center { grid-column: 2; } .view > .right { grid-column: 3; } .view > datalist { display: none; }
 .view.data { grid-template-columns: 250px minmax(0, 1fr); } .view.start, .view.preview { display: block; overflow: auto; }
 .panel { background: var(--panel); display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .panel.left { border-right: 1px solid var(--border); } .panel.right { border-left: 1px solid var(--border); }
@@ -209,3 +211,25 @@ textarea.inp { width: 100%; resize: vertical; }
 .export-grid { display: grid; grid-template-columns: 190px 1fr; gap: 12px; height: 56vh; } .file-list { overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
 .file-list .layer { width: 100%; border: 0; background: none; text-align: left; font-family: var(--mono); font-size: 12px; } .file-list .layer.on { background: var(--accent-bg); }
 .code { margin: 0; padding: 12px; overflow: auto; background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; font: 12px/1.5 var(--mono); white-space: pre; }
+
+/* ---- value blocks (reporters) ---- */
+.rslot { display: inline-flex; align-items: center; border-radius: 999px; transition: box-shadow .1s; }
+.rslot.over { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-bg); }
+.rep { --cat: #888; display: inline-flex; align-items: center; gap: 5px; padding: 1px 4px 1px 3px; border-radius: 999px; cursor: grab; vertical-align: middle;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cat) 78%, #fff 10%), var(--cat)); color: #fff; font-size: 12px; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.3), 0 1px 0 rgba(255,255,255,.3) inset; }
+.rep .b-ico { background: rgba(255,255,255,.28); width: 20px; height: 20px; font-size: 11px; clip-path: none; border-radius: 50%; text-shadow: none; }
+.rep .b-txt { color: #fff; font-weight: 600; font-size: 12px; }
+.rep .f, .rep .f-sel { background: #fff; color: #1f2328; border-color: transparent; padding: 1px 8px; font-size: 12px; }
+.rep.hex { border-radius: 0; padding: 2px 14px 2px 12px; clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%); filter: none; }
+.rep .rep { box-shadow: 0 0 0 1px rgba(255,255,255,.5); }
+.rep-x { border: 0; background: rgba(0,0,0,.25); color: #fff; width: 16px; height: 16px; border-radius: 50%; padding: 0; line-height: 1; font-size: 9px; cursor: pointer; opacity: .6; } .rep-x:hover { opacity: 1; background: rgba(0,0,0,.5); }
+.blk-item.rep-item { border-radius: 999px; padding-left: 10px; background: linear-gradient(180deg, color-mix(in srgb, var(--cat) 80%, #fff 10%), var(--cat)); color: #fff; border-color: transparent; font-weight: 600; margin-left: 10px; }
+.blk-item.rep-item::before { display: none; } .blk-item.rep-item .b-ico { background: rgba(255,255,255,.28); border-radius: 50%; clip-path: none; text-shadow: none; }
+.blk-item.rep-item.hex { border-radius: 0; clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%); padding: 7px 18px 7px 16px; }
+.rep-tag { margin-left: auto; font-style: normal; opacity: .7; font-size: 11px; }
+.cat-sub { font-size: 11px; font-weight: 700; color: var(--muted); padding: 6px 4px 0; text-transform: uppercase; letter-spacing: .4px; }
+
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; }
+.asset-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.asset-card img, .asset-card video { max-width: 100%; max-height: 110px; object-fit: contain; background: repeating-conic-gradient(#8883 0 25%, transparent 0 50%) 0 0 / 14px 14px; border-radius: 6px; }
+.asset-card audio { width: 100%; } .asset-card b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

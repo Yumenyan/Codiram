@@ -4,6 +4,7 @@ import { esc } from './util.js';
 import { fontStack, BUILTIN_FONTS, GOOGLE_FONTS } from './fonts.js';
 import { ANIMS, HOVERS, EASINGS } from './animations.js';
 import { J } from './i18n-helpers.js';
+import { assetUrl } from './model.js';
 
 export const BASE_CSS = `/* Base styles for Codiram components */
 *, *::before, *::after { box-sizing: border-box; }
@@ -26,6 +27,15 @@ export const BASE_CSS = `/* Base styles for Codiram components */
 .cx-modal { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .cx-modal-box { background: #fff; border-radius: 12px; padding: 20px; min-width: 280px; max-width: 90vw; max-height: 90vh; overflow: auto; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
 [hidden] { display: none !important; }
+.cx-stage { position: relative; overflow: hidden; touch-action: none; user-select: none; }
+.cx-sprite { position: absolute; display: grid; place-items: center; user-select: none; touch-action: none; line-height: 1; }
+.cx-sprite img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.cx-sprite > span { pointer-events: none; }
+.cx-canvas { display: block; max-width: 100%; }
+.cx-audio { width: 100%; }
+.cx-page { position: relative; }
+.cx-round { border-radius: 50%; overflow: hidden; }
+.cx-sprite[data-kind=shape] { background: #38bdf8; }
 .cx-fake-select { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 `;
 
@@ -36,6 +46,7 @@ export function cssDecls(node) {
   const s = node.style || {};
   const d = [];
   const add = (k, v) => { if (v !== undefined && v !== '' && v !== null) d.push(`${k}: ${v}`); };
+  if (s.left !== undefined || s.top !== undefined) { add('position', 'absolute'); add('left', px(s.left ?? 0)); add('top', px(s.top ?? 0)); }
   if (s.width) add('width', px(s.width));
   if (s.height) add('height', px(s.height));
   if (s.margin) add('margin', String(s.margin).split(/\s+/).map(px).join(' '));
@@ -185,8 +196,8 @@ const defs = [
   {
     type: 'image', label: 'Image', cat: 'Media', icon: '🖼', events: EVENT_CLICK,
     defaults: { props: { src: '', alt: '' }, style: { width: '160' } },
-    props: [{ k: 'src', label: 'Image URL', t: 'text', g: 'General', ph: 'https://... / assets/photo.png' }, { k: 'alt', label: 'Alt text', t: 'text', g: 'General' }],
-    render: (n, c) => `<img${c.attrs(n, 'cx cx-image', `src="${esc(n.props.src || PLACEHOLDER_IMG)}" alt="${esc(n.props.alt)}"`)}>`,
+    props: [{ k: 'src', label: 'Image URL', t: 'asset', g: 'General', kind: 'image', ph: 'https://... / assets/photo.png' }, { k: 'alt', label: 'Alt text', t: 'text', g: 'General' }],
+    render: (n, c) => `<img${c.attrs(n, 'cx cx-image', `src="${esc((c.editor ? assetUrl(c.project, n.props.src) : n.props.src) || PLACEHOLDER_IMG)}" alt="${esc(n.props.alt)}"`)}>`,
   },
   {
     type: 'icon', label: 'Icon', cat: 'Media', icon: '★', events: EVENT_CLICK,
@@ -197,8 +208,47 @@ const defs = [
   {
     type: 'video', label: 'Video', cat: 'Media', icon: '▶',
     defaults: { props: { src: '' }, style: { width: '320' } },
-    props: [{ k: 'src', label: 'Video URL', t: 'text', g: 'General' }],
-    render: (n, c) => `<video${c.attrs(n, 'cx cx-video', `controls src="${esc(n.props.src)}"`)}></video>`,
+    props: [{ k: 'src', label: 'Video URL', t: 'asset', g: 'General', kind: 'video' }],
+    render: (n, c) => `<video${c.attrs(n, 'cx cx-video', `controls src="${esc(c.editor ? assetUrl(c.project, n.props.src) : n.props.src)}"`)}></video>`,
+  },
+  // ---- game / media components ----
+  {
+    type: 'stage', label: 'Stage', cat: 'Game', icon: '🎮', container: true, freeLayout: true, events: EVENT_CLICK,
+    defaults: { props: {}, style: { width: '640', height: '400', background: '#0f172a', radius: '8' } },
+    props: [],
+    render: (n, c, kids) => `<div${c.attrs(n, 'cx cx-stage')}>${kids}</div>`,
+  },
+  {
+    type: 'sprite', label: 'Sprite', cat: 'Game', icon: '👾', events: [...EVENT_CLICK, { key: 'press', label: 'On Press', hat: 'onPress' }, { key: 'release', label: 'On Release', hat: 'onRelease' }],
+    defaults: { props: { kind: 'emoji', emoji: '🚀', src: '', circle: false }, style: { width: '56', height: '56' } },
+    props: [
+      { k: 'kind', label: 'Look', t: 'select', g: 'General', opts: [['emoji', J('絵文字/文字', 'Emoji / text')], ['image', J('画像', 'Image')], ['shape', J('図形(塗りつぶし)', 'Shape (filled)')]] },
+      { k: 'emoji', label: 'Emoji / text', t: 'text', g: 'General' },
+      { k: 'src', label: 'Image', t: 'asset', g: 'General', ph: 'assets/player.png' },
+      { k: 'circle', label: 'Round shape', t: 'bool', g: 'General' },
+    ],
+    render: (n, c) => {
+      const w = Number(n.style.width) || 56, h = Number(n.style.height) || 56, kind = n.props.kind;
+      const inner = kind === 'image' ? `<img src="${esc(c.editor ? assetUrl(c.project, n.props.src) : n.props.src)}" alt="">` : kind === 'shape' ? '' : `<span style="font-size:${Math.round(Math.min(w, h) * 0.8)}px">${esc(n.props.emoji)}</span>`;
+      return `<div${c.attrs(n, 'cx cx-sprite' + (n.props.circle ? ' cx-round' : ''), `data-kind="${esc(kind)}"`)}>${inner}</div>`;
+    },
+  },
+  {
+    type: 'canvas', label: 'Canvas', cat: 'Game', icon: '🖌', events: EVENT_CLICK,
+    defaults: { props: {}, style: { width: '480', height: '320', background: '#ffffff' } },
+    props: [],
+    render: (n, c) => `<canvas${c.attrs(n, 'cx cx-canvas', `width="${Number(n.style.width) || 480}" height="${Number(n.style.height) || 320}"`)}></canvas>`,
+  },
+  {
+    type: 'audio', label: 'Audio', cat: 'Media', icon: '🔊',
+    defaults: { props: { src: '', controls: true, loop: false, autoplay: false }, style: {} },
+    props: [
+      { k: 'src', label: 'Audio file', t: 'asset', g: 'General', kind: 'audio', ph: 'assets/bgm.mp3' },
+      { k: 'controls', label: 'Show controls', t: 'bool', g: 'General' },
+      { k: 'loop', label: 'Loop', t: 'bool', g: 'General' },
+      { k: 'autoplay', label: 'Autoplay', t: 'bool', g: 'General' },
+    ],
+    render: (n, c) => `<audio${c.attrs(n, 'cx cx-audio', `src="${esc(c.editor ? assetUrl(c.project, n.props.src) : n.props.src)}"${n.props.controls ? ' controls' : ''}${n.props.loop ? ' loop' : ''}${n.props.autoplay && !c.editor ? ' autoplay' : ''}`)}></audio>`,
   },
   // Page root (not shown in palette)
   {
@@ -216,7 +266,7 @@ export const COMING_SOON = [
   { label: 'Custom Component', icon: '🧩', cat: 'Advanced' },
 ];
 
-export const CATS = ['Basic', 'Layout', 'Data', 'Media', 'Advanced'];
+export const CATS = ['Basic', 'Layout', 'Data', 'Media', 'Game', 'Advanced'];
 
 /** Common property schema (layout/style) appended to each component's own props. */
 export function propSchema(node) {

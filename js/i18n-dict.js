@@ -98,6 +98,13 @@ addPairs([
   ['Language', '言語'], ['soon', '近日'], ['{0} rows', '{0} 行'], ['Page: {0}', 'ページ: {0}'],
 ]);
 
+addPairs([
+  ['Game', 'ゲーム'], ['Stage', 'ステージ'], ['Sprite', 'スプライト'], ['Canvas', 'キャンバス(描画)'], ['Audio', '音声'],
+  ['Look', '見た目'], ['Emoji / text', '絵文字/文字'], ['Round shape', '丸くする'], ['Audio file', '音声ファイル'], ['Show controls', 'コントロール表示'], ['Loop', 'ループ'], ['Autoplay', '自動再生'],
+  ['On Press', '押した瞬間'], ['On Release', '離した瞬間'], ['Assets', 'アセット'], ['Images & audio', '画像・音声'],
+  ['Remove the value block', '値ブロックを外す'],
+]);
+
 // Code strings that differ slightly from the canonical English key
 alias('New Project — テンプレートを選択', 'New Project — choose a template');
 alias('履歴 History', 'History');

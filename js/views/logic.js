@@ -7,6 +7,7 @@ import { allNodes, newBlock, newScript, scriptTitle, findBlock, walkBlocks, fres
 import { components } from '../registry.js';
 import { promptText, menu, toast, confirmDlg } from '../ui-kit.js';
 import { L, getLang, isBi, tf } from '../i18n.js';
+import { J } from '../i18n-helpers.js';
 import { ANIMS } from '../animations.js';
 
 const proj = () => store.project;
@@ -180,7 +181,7 @@ function blockEl(ctx, b) {
 function partEl(ctx, id, def, part, b) {
   if (isBi(part)) return L(part) === '' ? null : h('span', { class: 'b-txt' }, part);
   if (typeof part === 'string') return h('span', { class: 'b-txt' }, part);
-  return fieldEl(ctx, id, def, part.f, b);
+  return fieldEl(ctx, id, def, part.f, b.args, []);
 }
 
 function blockShell(ctx, id, def, b, isHat, slots) {
@@ -258,18 +259,36 @@ function dropAt(ctx, e, parentId, slot, index) {
 }
 
 // ---------------------------------------------------------------- field widgets
-function setArg(ctx, id, key, value, typing) {
+// Values live in block.args. An expression field holds either a string or { $b: reporterBlock },
+// so round / hexagon "value blocks" can be dropped into any expression slot (nested path editing).
+const rootOf = (sc, id) => (id.startsWith('hat:') ? sc.hat : findBlock(sc, id).block);
+const getPath = (o, path) => path.reduce((x, k) => x?.[k], o);
+function setIn(o, path, value) {
+  for (let i = 0; i < path.length - 1; i++) o = o[path[i]];
+  o[path[path.length - 1]] = value;
+}
+function setPath(ctx, id, path, value, typing) {
   commit('Edit block', (p) => {
     const sc = p.scripts.find((x) => x.id === ctx.s.id);
-    (id.startsWith('hat:') ? sc.hat : findBlock(sc, id).block).args[key] = value;
-  }, { coalesce: 'blk:' + id + ':' + key, origin: typing ? 'logic' : undefined });
+    setIn(rootOf(sc, id).args, path, value);
+  }, { coalesce: 'blk:' + id + ':' + path.join('.'), origin: typing ? 'logic' : undefined });
 }
+const isRep = (v) => !!v && typeof v === 'object' && !!v.$b;
+export const repCapable = (d) => !!d && d.kind !== 'hat' && (d.rep || d.reporter);
+const repParts = (d) => d.repParts || [{ ja: d.title, en: d.en || d.title }, ...Object.keys(d.fields || {}).filter((k) => k !== 'to').map((k) => E(k))];
+const E = (k) => ({ f: k });
+export function newRep(type, args) {
+  const d = blocks.get(type);
+  return { id: 'r' + Math.random().toString(36).slice(2, 8), type, args: { ...clone(d.defaults || {}), ...(args || {}) } };
+}
+let lastFocus = null;
 
 const sizeFor = (v, min = 3) => Math.max(min, Math.min(40, String(v ?? '').length + 1));
 
-function textInput(v, ph, onType, cls = 'f f-expr', list) {
+function textInput(v, ph, onType, cls = 'f f-expr', list, onFocus) {
   const i = h('input', { class: cls, value: v ?? '', placeholder: ph || '', size: sizeFor(v, ph ? Math.max(5, Math.min(ph.length + 1, 10)) : 3), spellcheck: 'false', list: list ? 'dl-names' : null });
   i.addEventListener('input', () => { i.size = sizeFor(i.value); onType(i.value); });
+  if (onFocus) i.addEventListener('focus', onFocus);
   return i;
 }
 
@@ -278,29 +297,82 @@ function sel(options, value, onChange, placeholder = '(選択)') {
     h('option', { value: '' }, placeholder), options.map(([v, l]) => h('option', { value: v, selected: v === value }, l)));
 }
 
-function fieldEl(ctx, id, def, key, b) {
-  const f = def.fields[key], v = b.args[key], p = proj();
-  const set = (val, typing) => setArg(ctx, id, key, val, typing);
+/** expression slot: text input, or an embedded value block; accepts dropped value blocks */
+function exprSlot(ctx, id, vpath, v, ph) {
+  const wrap = h('span', { class: 'rslot' });
+  if (isRep(v)) wrap.append(repEl(ctx, id, vpath, v.$b));
+  else wrap.append(textInput(v, ph, (x) => setPath(ctx, id, vpath, x, true), 'f f-expr', true, () => { lastFocus = { sid: ctx.s.id, id, vpath }; }));
+  wrap.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('application/x-codiram-rep')) { e.preventDefault(); e.stopPropagation(); wrap.classList.add('over'); } });
+  wrap.addEventListener('dragleave', () => wrap.classList.remove('over'));
+  wrap.addEventListener('drop', (e) => { wrap.classList.remove('over'); dropRep(ctx, e, id, vpath); });
+  return wrap;
+}
+
+function repEl(ctx, id, vpath, rb) {
+  const def = blocks.get(rb.type);
+  if (!def) return h('span', { class: 'rep err' }, '?');
+  const cat = catOf(def.cat), inner = [...vpath, '$b', 'args'];
+  return h('span', { class: 'rep' + (def.bool ? ' hex' : ''), style: { '--cat': cat.color }, draggable: 'true', title: blockTitle(def),
+    ondragstart: (e) => { e.stopPropagation(); e.dataTransfer.setData('application/x-codiram-rep', JSON.stringify({ kind: 'move', id, path: vpath })); e.dataTransfer.effectAllowed = 'move'; document.body.classList.add('dragging-blocks'); },
+    ondragend: () => document.body.classList.remove('dragging-blocks') },
+  h('span', { class: 'b-ico shape-' + cat.shape }, def.icon),
+  repParts(def).map((part) => (part.f !== undefined && !isBi(part) ? fieldEl(ctx, id, def, part.f, rb.args, inner) : L(part) === '' ? null : h('span', { class: 'b-txt' }, part))),
+  h('button', { class: 'rep-x', title: '値ブロックを外す', onclick: (e) => { e.stopPropagation(); setPath(ctx, id, vpath, ''); } }, '✕'));
+}
+
+function dropRep(ctx, e, id, vpath) {
+  const raw = e.dataTransfer.getData('application/x-codiram-rep');
+  if (!raw) return;
+  e.preventDefault(); e.stopPropagation();
+  document.body.classList.remove('dragging-blocks');
+  const d = JSON.parse(raw);
+  if (d.kind === 'new') { setPath(ctx, id, vpath, { $b: newRep(d.type, d.args) }); return; }
+  if (d.id === id && vpath.join('.').startsWith(d.path.join('.'))) return; // not into itself
+  commit('Move value block', (p) => {
+    const sc = p.scripts.find((x) => x.id === ctx.s.id);
+    const sroot = rootOf(sc, d.id).args;
+    const val = getPath(sroot, d.path);
+    setIn(sroot, d.path, '');
+    setIn(rootOf(sc, id).args, vpath, val);
+  });
+}
+
+export function insertRepAtFocus(type) {
+  const lf = lastFocus;
+  const s = script();
+  if (!lf || !s || lf.sid !== s.id || (!lf.id.startsWith('hat:') && !findBlock(s, lf.id))) { toast('値ブロックは、式の入力欄にドラッグするか、入力欄を選んでからクリックしてください'); return; }
+  setPath({ s }, lf.id, lf.vpath, { $b: newRep(type) });
+}
+
+function fieldEl(ctx, id, def, key, args, path) {
+  const f = def.fields[key], v = args[key], p = proj();
+  const vpath = [...path, key];
+  const set = (val, typing) => setPath(ctx, id, vpath, val, typing);
   switch (f.t) {
-    case 'expr': return textInput(v, f.ph, (x) => set(x, true), 'f f-expr', true);
+    case 'expr': return exprSlot(ctx, id, vpath, v, f.ph);
     case 'text': return textInput(v, f.ph, (x) => set(x, true), 'f');
     case 'ident': return textInput(v, f.ph, (x) => set(sanitizeIdent(x), true), 'f f-expr');
     case 'comp': {
       const opts = allNodes(p).filter((x) => x.node.type !== 'page' && (!f.types || f.types.includes(x.node.type))).map((x) => [x.node.id, `${x.node.name} (${x.node.type})`]);
+      if (!f.types || f.sprite) {
+        if (f.sprite) opts.unshift(['@me', J('(衝突イベントの自分側)', '(collision: this one)')]);
+        opts.unshift(['@it', J('(現在のクローン/衝突の相手)', '(current clone / collision partner)')]);
+      }
       return sel(opts, v, set, '(部品を選択)');
     }
     case 'model': return sel(p.models.map((m) => [m.name, m.name]), v, (x) => { set(x); }, '(モデル)');
     case 'page': return sel(p.pages.map((x) => [x.id, x.name]), v, set, '(ページ)');
     case 'fn': return sel(fnNames(p).map((n) => [n, n]), v, set, '(関数)');
     case 'select': return sel(f.opts, v, set);
+    case 'asset': return sel((p.assets || []).filter((a) => !f.kind || a.kind === f.kind).map((a) => ['assets/' + a.name, a.name]), v, set, '(アセット)');
     case 'fieldname': {
-      const m = p.models.find((x) => x.name === b.args.model);
+      const m = p.models.find((x) => x.name === args.model);
       return sel((m?.fields || []).map((x) => [x.name, x.name]), v, set, '(フィールド)');
     }
     case 'var': {
       const vt = f.vt;
       const list = p.variables.filter((x) => !vt || x.type === vt || x.name === v);
-      const s = h('select', { class: 'f f-sel', onchange: async (e) => {
+      return h('select', { class: 'f f-sel', onchange: async (e) => {
         if (e.target.value !== '__new') return set(e.target.value);
         const name = await promptText('新しい変数', '', '変数名');
         if (!name) { renderLogic(root); return; }
@@ -308,28 +380,28 @@ function fieldEl(ctx, id, def, key, b) {
         commit('Add variable', (pp) => {
           if (!pp.variables.some((x) => x.name === vn)) pp.variables.push({ name: vn, type: vt || 'Number', initial: vt === 'Array' ? '[]' : vt === 'Object' ? '{}' : '0' });
           const sc = pp.scripts.find((x) => x.id === ctx.s.id);
-          (id.startsWith('hat:') ? sc.hat : findBlock(sc, id).block).args[key] = vn;
+          setIn(rootOf(sc, id).args, vpath, vn);
         });
       } }, h('option', { value: '' }, '(変数)'), list.map((x) => h('option', { value: x.name, selected: x.name === v }, x.name)), h('option', { value: '__new' }, '＋ 新規変数…'));
-      return s;
     }
     case 'anim': return h('select', { class: 'f f-sel', onchange: (e) => set(e.target.value) }, h('option', { value: '' }, '(選択)'),
       ['in', 'loop', 'once'].map((k) => h('optgroup', { label: L({ in: { ja: '登場', en: 'Entrance' }, loop: { ja: '繰り返し', en: 'Looping' }, once: { ja: '単発・強調・退場', en: 'One-shot / exit' } }[k]) },
         Object.entries(ANIMS).filter(([, a]) => a.kind === k).map(([n, a]) => h('option', { value: n, selected: n === v }, L({ ja: a.ja, en: a.en }))))));
-    case 'cond': return condEl(ctx, id, key, v || defaultCond());
-    case 'values': return valuesEl(ctx, id, key, b, v || {});
+    case 'cond': return condEl(ctx, id, vpath, v || defaultCond());
+    case 'values': return valuesEl(ctx, id, vpath, args, v || {});
     default: return h('span', {}, String(v ?? ''));
   }
 }
 
-function condEl(ctx, id, key, c) {
-  const upd = (fn, typing) => { const n = clone(c); fn(n); setArg(ctx, id, key, n, typing); };
+function condEl(ctx, id, cpath, c) {
+  const upd = (fn) => { const n = clone(c); fn(n); setPath(ctx, id, cpath, n); };
   const wrap = h('span', { class: 'cond' });
   c.rows.forEach((r, i) => {
+    const rp = [...cpath, 'rows', i];
     wrap.append(h('span', { class: 'cond-row' },
-      textInput(r.l, 'left', (x) => upd((n) => { n.rows[i].l = x; }, true), 'f f-expr', true),
+      exprSlot(ctx, id, [...rp, 'l'], r.l, 'left'),
       h('select', { class: 'f f-sel op', onchange: (e) => upd((n) => { n.rows[i].op = e.target.value; }) }, COND_OPS.map(([v, l]) => h('option', { value: v, selected: v === r.op }, l))),
-      ['empty', 'notempty', 'js'].includes(r.op) ? null : textInput(r.r, 'right', (x) => upd((n) => { n.rows[i].r = x; }, true), 'f f-expr', true),
+      ['empty', 'notempty', 'js', 'true'].includes(r.op) ? null : exprSlot(ctx, id, [...rp, 'r'], r.r, 'right'),
       c.rows.length > 1 ? h('button', { class: 'mini', title: '条件を削除', onclick: () => upd((n) => n.rows.splice(i, 1)) }, '✕') : null,
       i < c.rows.length - 1 ? h('select', { class: 'f f-sel join', onchange: (e) => upd((n) => { n.join = e.target.value; }) }, [['and', 'かつ'], ['or', 'または']].map(([v, l]) => h('option', { value: v, selected: c.join === v }, l))) : null));
   });
@@ -338,11 +410,11 @@ function condEl(ctx, id, key, c) {
   return wrap;
 }
 
-function valuesEl(ctx, id, key, b, vals) {
-  const m = proj().models.find((x) => x.name === b.args.model);
+function valuesEl(ctx, id, vpath, args, vals) {
+  const m = proj().models.find((x) => x.name === args.model);
   if (!m) return h('span', { class: 'muted' }, '(先にモデルを選択)');
   return h('span', { class: 'values' }, m.fields.map((f) => h('span', { class: 'val' }, h('span', { class: 'b-txt' }, f.name + ' ='),
-    textInput(vals[f.name], f.name === 'id' ? '自動' : '', (x) => setArg(ctx, id, key, { ...vals, [f.name]: x }, true), 'f f-expr', true))));
+    exprSlot(ctx, id, [...vpath, f.name], vals[f.name], f.name === 'id' ? '自動' : ''))));
 }
 
 // ---------------------------------------------------------------- selection & operations
@@ -426,36 +498,50 @@ export function logicKey(e) {
 }
 
 // ---------------------------------------------------------------- palette
+let palMode = 'all'; // all | cmd | rep
 function renderPalette() {
   const R = els.right;
   R.textContent = '';
   R.append(h('div', { class: 'panel-title' }, 'Blocks'),
+    h('div', { class: 'seg' }, [['all', J('すべて', 'All')], ['cmd', J('命令', 'Commands')], ['rep', J('値(丸・六角)', 'Values')]].map(([k, l]) =>
+      h('button', { class: palMode === k ? 'on' : '', onclick: () => { palMode = k; renderPalette(); } }, l))),
     h('input', { class: 'inp search', placeholder: '🔍 Search blocks...', value: search, 'data-search': '1', oninput: (e) => { search = e.target.value; fillBlocks(); } }));
   els.pal = h('div', { class: 'scroll' });
   R.append(els.pal);
   fillBlocks();
 }
 
+function paletteItem(cat, d, title, make, asRep) {
+  const isHat = d.kind === 'hat';
+  const kind = asRep ? 'rep' : 'block';
+  return h('div', { class: 'blk-item' + (asRep ? ' rep-item' + (d.bool ? ' hex' : '') : ''), style: { '--cat': cat.color }, draggable: isHat ? null : 'true',
+    title: isHat ? 'クリックで新規スクリプトを作成' : asRep ? '式の入力欄へドラッグ(または入力欄を選んでクリック)' : 'クリックで追加 / ドラッグで配置',
+    ondragstart: (e) => { const m = make(); e.dataTransfer.setData(asRep ? 'application/x-codiram-rep' : 'application/x-codiram-block', JSON.stringify({ kind: 'new', type: m.type, args: m.args })); e.dataTransfer.effectAllowed = 'copy'; document.body.classList.add('dragging-blocks'); },
+    ondragend: () => document.body.classList.remove('dragging-blocks'),
+    onclick: () => (isHat ? createScript(d.type) : asRep ? insertRepAtFocus(make().type) : addBlock(make())) },
+  h('span', { class: 'b-ico shape-' + cat.shape }, d.icon), h('span', {}, title), asRep ? h('em', { class: 'rep-tag' }, d.bool ? '⬡' : '◯') : null);
+}
+
 function fillBlocks() {
   const q = search.trim().toLowerCase();
   els.pal.textContent = '';
   const fns = fnNames(proj());
+  const match = (x, cat) => !q || (x.title + (x.d.en || '') + x.d.title + cat.label + cat.ja + x.d.type).toLowerCase().includes(q);
   for (const cat of BLOCK_CATS) {
-    let defs = [...blocks.values()].filter((d) => d.cat === cat.id).map((d) => ({ d, title: blockTitle(d), make: () => ({ type: d.type }) }));
-    if (cat.id === 'Control') fns.forEach((n) => defs.push({ d: blocks.get('call_fn'), title: tf('ƒ {0} を実行', n), make: () => ({ type: 'call_fn', args: { name: n } }) }));
-    defs = defs.filter((x) => !q || (x.title + (x.d.en || '') + x.d.title + cat.label + cat.ja + x.d.type).toLowerCase().includes(q));
-    if (!defs.length) continue;
+    const all = [...blocks.values()].filter((d) => d.cat === cat.id);
+    let cmds = palMode === 'rep' ? [] : all.filter((d) => d.kind !== 'reporter').map((d) => ({ d, title: blockTitle(d), make: () => ({ type: d.type }) }));
+    if (cat.id === 'Control' && palMode !== 'rep') fns.forEach((n) => cmds.push({ d: blocks.get('call_fn'), title: tf('ƒ {0} を実行', n), make: () => ({ type: 'call_fn', args: { name: n } }) }));
+    const reps = palMode === 'cmd' ? [] : all.filter(repCapable).map((d) => ({ d, title: blockTitle(d), make: () => ({ type: d.type }) }));
+    const rc = cmds.filter((x) => match(x, cat)), rr = reps.filter((x) => match(x, cat));
+    if (!rc.length && !rr.length) continue;
     const key = 'bpal:' + cat.id, closed = ui.collapsed.has(key) && !q;
     els.pal.append(h('div', { class: 'cat' },
       h('button', { class: 'cat-head', style: { '--cat': cat.color }, onclick: () => { closed ? ui.collapsed.delete(key) : ui.collapsed.add(key); fillBlocks(); } },
         closed ? '▸ ' : '▾ ', h('span', { class: 'b-ico shape-' + cat.shape }, cat.icon), ' ' + catName(cat)),
-      closed ? null : h('div', { class: 'cat-body' }, defs.map(({ d, title, make }) => {
-        const isHat = d.kind === 'hat';
-        return h('div', { class: 'blk-item', style: { '--cat': cat.color, '--pat': cat.pattern }, draggable: isHat ? null : 'true', title: isHat ? 'クリックで新規スクリプトを作成' : 'クリックで追加 / ドラッグで配置',
-          ondragstart: (e) => { const m = make(); e.dataTransfer.setData('application/x-codiram-block', JSON.stringify({ kind: 'new', type: m.type, args: m.args })); e.dataTransfer.effectAllowed = 'copy'; document.body.classList.add('dragging-blocks'); },
-          ondragend: () => document.body.classList.remove('dragging-blocks'),
-          onclick: () => (isHat ? createScript(d.type) : addBlock(make())) }, h('span', { class: 'b-ico shape-' + cat.shape }, d.icon), h('span', {}, title));
-      }))));
+      closed ? null : h('div', { class: 'cat-body' },
+        rc.map(({ d, title, make }) => paletteItem(cat, d, title, make, false)),
+        rr.length ? h('div', { class: 'cat-sub' }, J('値ブロック(式に入れる)', 'Value blocks (drop into a field)')) : null,
+        rr.map(({ d, title, make }) => paletteItem(cat, d, title, make, true)))));
   }
 }
 

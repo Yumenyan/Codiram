@@ -11,7 +11,7 @@ export async function openExport(project) {
   const code = h('pre', { class: 'code' });
   const list = h('div', { class: 'file-list' });
   const show = (n) => {
-    cur = n; code.textContent = files[n] || '(empty)';
+    cur = n; code.textContent = typeof files[n] === 'string' ? (files[n] || '(empty)') : `(binary file, ${files[n].length} bytes)`;
     list.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.n === n));
   };
   names.forEach((n) => list.append(h('button', { class: 'layer', 'data-n': n, onclick: () => show(n) }, n)));
@@ -23,7 +23,7 @@ export async function openExport(project) {
       h('p', { class: 'muted' }, 'HTML / CSS / JavaScript / JSON のみ。特定のエディタやサービスに依存しません。ZIP を展開して index.html を開くだけで動作します。'),
       h('div', { class: 'export-grid' }, list, code)),
     actions: [
-      { label: '現在のファイルをコピー', onClick: async () => { await navigator.clipboard?.writeText(files[cur]); toast('コピーしました'); return false; } },
+      { label: '現在のファイルをコピー', onClick: async () => { if (typeof files[cur] === 'string') await navigator.clipboard?.writeText(files[cur]); toast('コピーしました'); return false; } },
       { label: '閉じる', value: false },
       { label: '⬇ ZIP をダウンロード', primary: true, onClick: () => { download(`${slug}.zip`, makeZip(Object.fromEntries(Object.entries(files).map(([k, v]) => [`${slug}/${k}`, v])))); toast('ZIP を書き出しました'); } },
     ],

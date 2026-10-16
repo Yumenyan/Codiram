@@ -36,6 +36,9 @@ export const BLOCK_CATS = [
   { id: 'Time', label: 'Time', ja: '日付・時刻', icon: '◷', color: '#92400e', shape: 'circle' },
   { id: 'Data', label: 'Data', ja: 'データ', icon: '▦', color: '#be185d', shape: 'square' },
   { id: 'UI', label: 'UI', ja: 'UI', icon: '▢', color: '#4d7c0f', shape: 'tri' },
+  { id: 'Game', label: 'Game', ja: 'ゲーム', icon: '🎮', color: '#16a34a', shape: 'hex' },
+  { id: 'Sound', label: 'Sound', ja: 'サウンド', icon: '♪', color: '#db2777', shape: 'circle' },
+  { id: 'Draw', label: 'Draw', ja: '描画', icon: '✎', color: '#0891b2', shape: 'diamond' },
   { id: 'Animation', label: 'Animation', ja: 'アニメーション', icon: '✦', color: '#ea580c', shape: 'diamond' },
   { id: 'System', label: 'System', ja: 'システム', icon: '⚙', color: '#334155', shape: 'hex' },
 ];

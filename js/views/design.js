@@ -236,6 +236,8 @@ function startResize(e, dir) {
 function onDragStart(e) {
   const el = e.target.closest('[data-nid]');
   if (!el || el.dataset.type === 'page') { e.preventDefault(); return; }
+  const gr = el.getBoundingClientRect();
+  ui.grab = { dx: e.clientX - gr.left, dy: e.clientY - gr.top };
   e.dataTransfer.setData('application/x-codiram-node', el.dataset.nid);
   e.dataTransfer.effectAllowed = 'move';
   select(el.dataset.nid);
@@ -254,6 +256,11 @@ function dropTarget(e) {
   if (!cont) return null;
   const host = hostOf(cont);
   const kids = [...host.children].filter((c) => c.dataset?.nid);
+  const cnode = findNode(proj(), cont.dataset.nid)?.node;
+  if (cnode && components.get(cnode.type)?.freeLayout) {
+    const r = host.getBoundingClientRect();
+    return { cont, index: kids.length, free: true, pos: { x: e.clientX - r.left + host.scrollLeft, y: e.clientY - r.top + host.scrollTop }, line: null };
+  }
   const horiz = getComputedStyle(host).flexDirection.startsWith('row');
   let index = kids.length;
   if (ref) {
@@ -286,11 +293,18 @@ function onDragOver(e) {
   e.preventDefault();
   els.surface.querySelectorAll('.drop-target').forEach((x) => x.classList.remove('drop-target'));
   t.cont.classList.add('drop-target');
-  Object.assign(els.dropLine.style, { display: 'block', left: t.line.x + 'px', top: t.line.y + 'px', width: t.line.w + 'px', height: t.line.h + 'px' });
+  if (t.line) Object.assign(els.dropLine.style, { display: 'block', left: t.line.x + 'px', top: t.line.y + 'px', width: t.line.w + 'px', height: t.line.h + 'px' });
+  else els.dropLine.style.display = 'none';
 }
 function clearDrop() {
   els.dropLine.style.display = 'none';
   els.surface.querySelectorAll('.drop-target').forEach((x) => x.classList.remove('drop-target'));
+}
+
+function placeFree(node, pos, grab) {
+  const w = Number(node.style.width) || 56, h = Number(node.style.height) || 56;
+  node.style.left = String(Math.round(pos.x - (grab ? grab.dx : w / 2)));
+  node.style.top = String(Math.round(pos.y - (grab ? grab.dy : h / 2)));
 }
 
 function onDrop(e) {
@@ -302,8 +316,8 @@ function onDrop(e) {
   const newType = e.dataTransfer.getData('application/x-codiram-new');
   const libId = e.dataTransfer.getData('application/x-codiram-lib');
   const moveId = e.dataTransfer.getData('application/x-codiram-node');
-  if (newType) insert(contId, t.index, (p) => createNode(p, newType), 'Add ' + newType);
-  else if (libId) addFromLibrary(libId, contId, t.index);
+  if (newType) insert(contId, t.index, (p) => { const n = createNode(p, newType); if (t.free) placeFree(n, t.pos); return n; }, 'Add ' + newType);
+  else if (libId) addFromLibrary(libId, contId, t.index, t.free ? t.pos : null);
   else if (moveId) {
     const src = els.surface.querySelector(`[data-nid="${moveId}"]`);
     if (!src || src.contains(t.cont)) return; // cannot drop into itself
@@ -314,6 +328,8 @@ function onDrop(e) {
       let idx = t.index;
       if (f.parent === c && f.index < idx) idx--;
       c.children.splice(idx, 0, f.node);
+      if (t.free) placeFree(f.node, t.pos, ui.grab);
+      else { delete f.node.style.left; delete f.node.style.top; }
     });
     select(moveId);
   }
@@ -339,14 +355,19 @@ function insertionPoint() {
 
 function addComponent(type) {
   const { id, index } = insertionPoint();
-  insert(id, index, (p) => createNode(p, type), 'Add ' + type);
+  insert(id, index, (p) => {
+    const n = createNode(p, type);
+    const par = findNode(p, id).node;
+    if (components.get(par.type)?.freeLayout) { const k = par.children.length; n.style.left = String(30 + (k * 40) % 400); n.style.top = String(30 + (k * 30) % 240); }
+    return n;
+  }, 'Add ' + type);
 }
 
-function addFromLibrary(libId, contId, index) {
+function addFromLibrary(libId, contId, index, pos) {
   const item = getLibrary().find((l) => l.id === libId);
   if (!item) return;
   const ip = contId ? { id: contId, index } : insertionPoint();
-  insert(ip.id, ip.index, (p) => freshClone(p, item.node), 'Insert ' + item.name);
+  insert(ip.id, ip.index, (p) => { const n = freshClone(p, item.node); if (pos) placeFree(n, pos); return n; }, 'Insert ' + item.name);
 }
 
 // ---------------------------------------------------------------- node operations (also used by shortcuts)
@@ -464,6 +485,12 @@ function propRow(node, pr) {
     case 'select': input = h('select', { class: 'sel', 'data-prop': pr.k, onchange: (e) => set(e.target.value) },
       pr.opts.map((o) => { const [ov, ol] = Array.isArray(o) ? o : [o, o === '' ? '(default)' : o]; return h('option', { value: ov, selected: String(val ?? '') === ov }, ol); })); break;
     case 'font': input = fontSelect(val, (v) => set(v), { 'data-prop': pr.k }); break;
+    case 'asset': {
+      const list = (proj().assets || []).filter((a) => !pr.kind || a.kind === pr.kind);
+      const txt = h('input', { class: 'inp', value: val ?? '', placeholder: pr.ph || 'URL', 'data-prop': pr.k, oninput: (e) => set(e.target.value, live) });
+      const pick = h('select', { class: 'sel', title: 'アセットから選ぶ', onchange: (e) => { if (e.target.value) set(e.target.value); } }, h('option', { value: '' }, '▾'), list.map((a) => h('option', { value: 'assets/' + a.name }, a.name)));
+      input = h('div', { class: 'colorf' }, pick, txt); break;
+    }
     case 'playanim': input = h('button', { class: 'btn small', onclick: () => playOnCanvas(node) }, '▶ Play'); break;
     case 'model': input = h('select', { class: 'sel', 'data-prop': pr.k, onchange: (e) => set(e.target.value) },
       h('option', { value: '' }, '(なし)'), proj().models.map((m) => h('option', { value: m.name, selected: val === m.name }, m.name))); break;
@@ -512,6 +539,15 @@ export function designKey(e) {
   if (ctrl && e.key.toLowerCase() === 'v') { return pasteSel(); }
   if (e.altKey && e.key === 'ArrowUp') { moveSibling(-1); return true; }
   if (e.altKey && e.key === 'ArrowDown') { moveSibling(1); return true; }
+  if (e.key.startsWith('Arrow') && !e.altKey) {
+    const f = selNodeInfo();
+    if (f && f.parent && components.get(f.parent.type)?.freeLayout) {
+      const d = e.shiftKey ? 10 : 1;
+      const dx = e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0, dy = e.key === 'ArrowUp' ? -d : e.key === 'ArrowDown' ? d : 0;
+      commit('Nudge', (p) => { const n = findNode(p, f.node.id).node; n.style.left = String((Number(n.style.left) || 0) + dx); n.style.top = String((Number(n.style.top) || 0) + dy); }, { coalesce: 'nudge' + f.node.id });
+      return true;
+    }
+  }
   if (e.key === 'Escape') { select(page().root.id); return true; }
   return false;
 }

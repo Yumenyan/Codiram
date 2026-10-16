@@ -20,8 +20,25 @@ export function emptyProject(name = 'Untitled Project') {
     v: 1, id: uid('p'), name, created: Date.now(), updated: Date.now(),
     settings: { title: name },
     pages: [newPage('Main', 'main')],
-    models: [], variables: [], scripts: [],
+    models: [], variables: [], scripts: [], assets: [],
   };
+}
+
+/** Fill in fields added in later versions so old saved projects keep working. */
+export function normalizeProject(p) {
+  p.assets = p.assets || [];
+  p.settings = p.settings || {};
+  p.variables = p.variables || [];
+  return p;
+}
+
+/** assets/<name> -> data URL (editor / preview), anything else unchanged */
+export function assetUrl(project, src) {
+  if (typeof src === 'string' && src.startsWith('assets/')) {
+    const a = (project.assets || []).find((x) => 'assets/' + x.name === src);
+    if (a) return a.data;
+  }
+  return src;
 }
 
 export function newModel(project, name = 'Model') {
@@ -156,12 +173,14 @@ export function lint(project) {
   const vars = new Set(project.variables.map((v) => v.name));
   const pages = new Set(project.pages.map((p) => p.id));
   const fns = new Set(fnNames(project));
-  const check = (b, script) => {
+  const check = (b, script, nested) => {
     const def = blocks.get(b.type);
     if (!def) { problems.push({ script: script.id, block: b.id, msg: tf('不明なブロック: {0}', b.type) }); return; }
     for (const [k, f] of Object.entries(def.fields || {})) {
+      if (nested && k === 'to') continue; // value blocks have no result variable
       const v = b.args[k];
       const bad = (m) => problems.push({ script: script.id, block: b.id, msg: m });
+      if (f.t === 'comp' && (v === '@it' || v === '@me')) continue;
       if (f.t === 'comp') { if (!v) bad(tt('対象のUI部品が未選択です')); else if (!nodes.has(v)) bad(tt('対象のUI部品が見つかりません(削除された可能性)')); }
       if (f.t === 'model') { if (!v) bad(tt('データモデルが未選択です')); else if (!models.has(v)) bad(tf('データモデル「{0}」が存在しません', v)); }
       if (f.t === 'var') { if (!v) { if (!f.opt) bad(tt('変数が未選択です')); } else if (!vars.has(v)) bad(tf('変数「{0}」が存在しません', v)); }
@@ -174,9 +193,17 @@ export function lint(project) {
       }
     }
   };
+  // value blocks nested inside argument values are checked too
+  const deep = (v, owner, script) => {
+    if (!v || typeof v !== 'object') return;
+    if (v.$b) { check({ id: owner, type: v.$b.type, args: v.$b.args }, script, true); deep(v.$b.args, owner, script); return; }
+    Object.values(v).forEach((x) => deep(x, owner, script));
+  };
+  const check0 = check;
   for (const s of project.scripts) {
     check({ id: 'hat:' + s.id, type: s.hat.type, args: s.hat.args }, s);
-    walkBlocks(s.body, (b) => check(b, s));
+    deep(s.hat.args, 'hat:' + s.id, s);
+    walkBlocks(s.body, (b) => { check(b, s); deep(b.args, b.id, s); });
   }
   return problems;
 }

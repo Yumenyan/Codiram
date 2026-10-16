@@ -5,6 +5,7 @@ import { store, ui, commit } from '../store.js';
 import { FIELD_TYPES, VAR_TYPES, newModel, nextRowId, defaultFor, walkBlocks, allNodes } from '../model.js';
 import { dialog, confirmDlg, toast } from '../ui-kit.js';
 import { tf } from '../i18n.js';
+import { download } from '../util.js';
 
 const proj = () => store.project;
 let root;
@@ -15,7 +16,7 @@ export function renderData(container, origin) {
   root.className = 'view data';
   root.textContent = '';
   const p = proj();
-  if (ui.selModel !== '__vars' && !p.models.some((m) => m.id === ui.selModel)) ui.selModel = p.models[0]?.id || '__vars';
+  if (ui.selModel !== '__vars' && ui.selModel !== '__assets' && !p.models.some((m) => m.id === ui.selModel)) ui.selModel = p.models[0]?.id || '__vars';
 
   const left = h('aside', { class: 'panel left' },
     h('div', { class: 'panel-title' }, 'Models'),
@@ -25,8 +26,11 @@ export function renderData(container, origin) {
       h('button', { class: 'btn small wide', onclick: addModel }, '＋ New Model'),
       h('div', { class: 'panel-title' }, 'Variables'),
       h('div', { class: 'layer' + (ui.selModel === '__vars' ? ' on' : ''), onclick: () => { ui.selModel = '__vars'; renderData(root); } },
-        h('span', { class: 'pal-ico' }, '𝑥'), h('span', {}, 'App variables'), h('em', {}, p.variables.length + ''))));
-  const main = h('section', { class: 'center scroll data-main' }, ui.selModel === '__vars' ? varsEditor() : modelEditor(p.models.find((m) => m.id === ui.selModel)));
+        h('span', { class: 'pal-ico' }, '𝑥'), h('span', {}, 'App variables'), h('em', {}, p.variables.length + '')),
+      h('div', { class: 'panel-title' }, 'Assets'),
+      h('div', { class: 'layer' + (ui.selModel === '__assets' ? ' on' : ''), onclick: () => { ui.selModel = '__assets'; renderData(root); } },
+        h('span', { class: 'pal-ico' }, '🗂'), h('span', {}, 'Images & audio'), h('em', {}, (p.assets || []).length + ''))));
+  const main = h('section', { class: 'center scroll data-main' }, ui.selModel === '__vars' ? varsEditor() : ui.selModel === '__assets' ? assetsEditor() : modelEditor(p.models.find((m) => m.id === ui.selModel)));
   root.append(left, main);
 }
 
@@ -162,4 +166,36 @@ function varsEditor() {
         h('td', {}, h('input', { class: 'inp', value: v.initial, oninput: (e) => edit('Variable initial', (vs) => { vs[i].initial = e.target.value; }, { coalesce: 'vi' + i, origin: 'grid' }) })),
         h('td', {}, h('button', { class: 'icon-btn', title: '削除', onclick: () => edit('Delete variable', (vs) => vs.splice(i, 1)) }, '✕')))))),
     h('button', { class: 'btn small', onclick: () => edit('Add variable', (vs) => { let n = 1; while (vs.some((x) => x.name === 'var' + n)) n++; vs.push({ name: 'var' + n, type: 'Number', initial: '0' }); }) }, '＋ Variable'));
+}
+
+// ---------- assets (images / audio / video bundled with the app) ----------
+const kindOf = (mime) => (mime.startsWith('image/') ? 'image' : mime.startsWith('audio/') ? 'audio' : mime.startsWith('video/') ? 'video' : 'other');
+const fmtSize = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+
+function assetsEditor() {
+  const p = proj();
+  const input = h('input', { type: 'file', multiple: true, accept: 'image/*,audio/*,video/*', style: { display: 'none' }, onchange: async () => {
+    for (const f of input.files) {
+      if (f.size > 3 * 1024 * 1024) { toast(tf('{0} は大きすぎます(3MBまで)', f.name)); continue; }
+      const data = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+      commit('Add asset', (pp) => {
+        let name = f.name.replace(/[^\w.\-]+/g, '_'), n = 1;
+        const taken = new Set(pp.assets.map((a) => a.name));
+        while (taken.has(name)) name = f.name.replace(/(\.[^.]*)?$/, '') .replace(/[^\w.\-]+/g, '_') + '_' + (++n) + (/\.[^.]+$/.exec(f.name)?.[0] || '');
+        pp.assets.push({ id: uid('a'), name, kind: kindOf(f.type), mime: f.type, size: f.size, data });
+      });
+    }
+  } });
+  const total = (p.assets || []).reduce((s2, a) => s2 + (a.size || 0), 0);
+  return h('div', {},
+    h('h3', {}, 'Images & audio'),
+    h('p', { class: 'muted' }, 'ここに追加したファイルは Export 時に assets/ フォルダへ書き出されます。スプライトの画像・音声ブロック・Image/Audio 部品から選べます。'),
+    h('div', { class: 'row-gap' }, h('button', { class: 'btn primary', onclick: () => input.click() }, '⬆ ファイルを追加'), h('span', { class: 'muted small', style: { alignSelf: 'center' } }, tf('合計 {0}(ブラウザ保存の上限は約5MBです)', fmtSize(total))), input),
+    h('div', { class: 'asset-grid' }, (p.assets || []).map((a) => h('div', { class: 'asset-card' },
+      a.kind === 'image' ? h('img', { src: a.data, alt: a.name }) : a.kind === 'audio' ? h('audio', { src: a.data, controls: true }) : a.kind === 'video' ? h('video', { src: a.data, controls: true }) : h('div', { class: 'muted' }, '(file)'),
+      h('b', { title: 'assets/' + a.name }, a.name), h('span', { class: 'muted small' }, `${a.kind} · ${fmtSize(a.size || 0)}`),
+      h('div', { class: 'row-gap' },
+        h('button', { class: 'btn small', onclick: () => { navigator.clipboard?.writeText('assets/' + a.name); toast('パスをコピーしました'); } }, 'assets/…'),
+        h('button', { class: 'btn small danger', onclick: () => commit('Delete asset', (pp) => { pp.assets = pp.assets.filter((x) => x.id !== a.id); }) }, '削除'))))),
+    !(p.assets || []).length ? h('div', { class: 'muted' }, 'まだアセットがありません。') : null);
 }

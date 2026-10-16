@@ -9,7 +9,9 @@ const opts = (arr) => arr.map(([v, ja, en]) => [v, J(ja, en)]);
 /** Register a statement whose title is bilingual. */
 const B = (type, cat, icon, ja, en, parts, fields, defaults, gen, slots) => {
   stmt(type, cat, icon, ja, parts, fields, defaults, gen, slots);
-  blocks.get(type).en = en;
+  const d = blocks.get(type);
+  d.en = en;
+  d.reporter = !!(fields.to && !fields.to.opt && !slots); // single-result blocks double as value blocks
 };
 const H = (type, ja, en, parts, fields, defaults, gen, summary) => { hat(type, ja, parts, fields, defaults, gen, summary); blocks.get(type).en = en; };
 
@@ -473,3 +475,6 @@ B('sys_info', 'System', 'ℹ', '環境情報の取得', 'Get environment info',
 B('sys_title', 'System', '🏷', 'ページタイトルを設定', 'Set page title', [J('ページタイトルを', 'Set page title to'), E('value'), J('にする', '')],
   { value: X() }, { value: '' }, (b, g) => [`document.title = ${str(g, b.args.value)};`]);
 B('sys_reload', 'System', '⟳', 'ページを再読み込み', 'Reload page', [J('ページを再読み込みする', 'Reload the page')], {}, {}, () => ['location.reload();']);
+
+// Blocks whose value is true/false are hexagonal when used as value blocks.
+['math_is', 'regex_test', 'list_test', 'sys_confirm'].forEach((t) => { blocks.get(t).bool = true; });
